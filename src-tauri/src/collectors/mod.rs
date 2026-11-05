@@ -1,6 +1,7 @@
 //! 指标采集层:后台线程 1Hz 轮询 sysinfo + PDH,
 //! 产出 [`MetricSample`](实时曲线)与 [`ProcessInfo`](进程表)缓存。
 
+pub mod hung_window;
 pub mod pdh;
 
 use std::collections::HashMap;
@@ -12,13 +13,15 @@ use sysinfo::{Disks, Networks, ProcessesToUpdate, System};
 
 use tauri::{AppHandle, Emitter};
 
+use crate::engine::{DetectorConfig, LagDetector};
 use crate::state::AppState;
 
 pub const COLLECT_INTERVAL: Duration = Duration::from_millis(1000);
 pub const EVENT_METRICS: &str = "metrics:sample";
+pub const EVENT_LAG: &str = "lag:event";
 
 /// 一次采样:前端 1Hz 接收,同时是卡顿检测引擎的输入
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricSample {
     pub ts_ms: u64,
@@ -176,6 +179,9 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     }
     let mut prev_io: HashMap<u32, (u64, u64)> = HashMap::new();
     let mut prev_net: (u64, u64) = (0, 0);
+    let mut detector = LagDetector::new(DetectorConfig::default());
+    // 挂起窗口检测在独立线程(检测调用最坏阻塞 2s/窗口,不能占用采样线程)
+    let hung_watch = hung_window::HungWatch::start();
     thread::sleep(COLLECT_INTERVAL);
 
     let mut tick: u64 = 0;
@@ -249,8 +255,19 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         let sample = build_sample(&sys, pdh_set.as_ref(), net_rx_bps, net_tx_bps);
 
         *state.last_sample.lock().unwrap() = Some(sample.clone());
-        *state.processes.lock().unwrap() = processes;
+        *state.processes.lock().unwrap() = processes.clone();
         let _ = app.emit(EVENT_METRICS, &sample);
+
+        // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端
+        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot()) {
+            let mut ev = event;
+            match state.db.insert_event(&ev) {
+                Ok(id) => ev.id = Some(id),
+                Err(e) => eprintln!("[db] 事件入库失败: {e}"),
+            }
+            eprintln!("[lag] 触发: {:?}", ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>());
+            let _ = app.emit(EVENT_LAG, &ev);
+        }
 
         tick += 1;
         let elapsed = t0.elapsed();

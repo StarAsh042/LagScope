@@ -4,7 +4,9 @@ use sysinfo::Pid;
 
 use tauri::State;
 
+use crate::collectors::hung_window;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::engine::{LagEvent, LagReason};
 use crate::state::AppState;
 
 /// 最新进程快照(1Hz 由采集线程刷新,进程表每 2s 拉取)
@@ -35,6 +37,40 @@ pub fn kill_process(state: State<'_, std::sync::Arc<AppState>>, pid: u32) -> Res
         Some(proc) => Ok(proc.kill()),
         None => Err(format!("进程 {pid} 不存在或已退出")),
     }
+}
+
+/// 最近的卡顿事件列表(新→旧)
+#[tauri::command]
+pub fn list_lag_events(
+    state: State<'_, std::sync::Arc<AppState>>,
+    limit: Option<u32>,
+) -> Result<Vec<LagEvent>, String> {
+    state.db.list_events(limit.unwrap_or(100))
+}
+
+/// 立即诊断:抓取当前状态生成一次事件(不入库时也返回给前端展示)
+#[tauri::command]
+pub fn diagnose_now(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Result<LagEvent, String> {
+    let counters = state
+        .last_sample
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "暂无采样数据".to_string())?;
+    let processes = state.processes.lock().unwrap().clone();
+    let hung = hung_window::detect_hung_windows();
+    // 手动诊断只如实记录当前状态;若没有任何自动阈值命中,标记为 manual
+    let reasons = vec![LagReason {
+        kind: "manual".into(),
+        detail: "手动触发诊断快照".into(),
+        value: 0.0,
+    }];
+    let mut event = LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung);
+    let id = state.db.insert_event(&event)?;
+    event.id = Some(id);
+    Ok(event)
 }
 
 #[cfg(test)]
