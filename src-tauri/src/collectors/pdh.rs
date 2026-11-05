@@ -138,18 +138,23 @@ mod tests {
             .add(r"\Processor(_Total)\DPCs Queued/sec")
             .or_else(|_| q.add(r"\Processor(_Total)\DPCs/sec"))
             .expect("add dpc");
-        let gpu = q.add(r"\GPU Engine(*engtype_3D)\Utilization Percentage")
+        let pages = q.add(r"\Memory\Pages Input/sec").expect("add pages");
+        let gpu = q
+            .add(r"\GPU Engine(*engtype_3D)\Utilization Percentage")
             .expect("add gpu engine");
 
         q.collect().expect("collect #1");
-        sleep(Duration::from_millis(300));
+        sleep(Duration::from_millis(1100));
         q.collect().expect("collect #2");
 
         let cpu_v = q.read(&cpu).expect("cpu value");
         assert!((0.0..=100.0).contains(&cpu_v), "cpu% 超范围: {cpu_v}");
-        // DPC 速率可能为 0,只验证读取不 panic
-        let _ = q.read(&dpc);
-        // GPU 计数器在无独显/精简系统上实例可能为空,仅验证 API 可调
-        let _ = q.read_instances(&gpu);
+        let dpc_v = q.read(&dpc).expect("dpc value");
+        let pages_v = q.read(&pages).expect("pages value");
+        let gpu_inst = q.read_instances(&gpu);
+        println!("cpu%={cpu_v:.1} dpc/s={dpc_v:.1} pages/s={pages_v:.1} gpu_instances={}", gpu_inst.len());
+        // 速率型计数器的合理量级:DPC 每秒几百到几万;若拿到累计原始值会是 1e7 量级
+        assert!(dpc_v < 1_000_000.0, "DPC/s 异常(疑似原始值): {dpc_v}");
+        assert!(pages_v < 1_000_000.0, "Pages Input/s 异常(疑似原始值): {pages_v}");
     }
 }

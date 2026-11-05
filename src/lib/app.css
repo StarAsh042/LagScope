@@ -1,0 +1,46 @@
+/* LagScope 全局主题 */
+:root {
+  --bg: #0d1220;
+  --panel: #131926;
+  --border: #232a3a;
+  --track: #232a3a;
+  --text: #e8ecf4;
+  --text-dim: #8b94a7;
+  --accent: #3b6cd4;
+  --ok: #3dd68c;
+  --warn: #f5a623;
+  --err: #e5484d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+#app,
+.sveltekit-app-container {
+  height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3348;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
