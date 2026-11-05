@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use sysinfo::System;
 
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::engine::DetectorConfig;
 use crate::store::Db;
 
 pub struct AppState {
@@ -18,10 +19,14 @@ pub struct AppState {
     pub disks: Mutex<Vec<DiskInfo>>,
     /// 卡顿事件库
     pub db: Db,
+    /// 检测阈值(设置页热更新)
+    pub config: Mutex<DetectorConfig>,
+    /// 关窗是否隐藏到托盘
+    pub close_to_tray: Mutex<bool>,
 }
 
 impl AppState {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: Db, config: DetectorConfig, close_to_tray: bool) -> Self {
         Self {
             // System::new 失败意味着连基本内存信息都无法初始化,直接 panic
             sys: Mutex::new(System::new().expect("sysinfo System::new 失败")),
@@ -29,6 +34,8 @@ impl AppState {
             last_sample: Mutex::new(None),
             disks: Mutex::new(Vec::new()),
             db,
+            config: Mutex::new(config),
+            close_to_tray: Mutex::new(close_to_tray),
         }
     }
 }

@@ -48,10 +48,10 @@ pub fn list_lag_events(
     state.db.list_events(limit.unwrap_or(100))
 }
 
-/// 立即诊断:抓取当前状态生成一次事件(不入库时也返回给前端展示)
-#[tauri::command]
-pub fn diagnose_now(
-    state: State<'_, std::sync::Arc<AppState>>,
+/// 立即诊断:抓取当前状态生成一次事件并推送前端(命令与托盘菜单共用)
+pub fn run_diagnose(
+    app: &tauri::AppHandle,
+    state: &std::sync::Arc<AppState>,
 ) -> Result<LagEvent, String> {
     let counters = state
         .last_sample
@@ -70,7 +70,17 @@ pub fn diagnose_now(
     let mut event = LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung);
     let id = state.db.insert_event(&event)?;
     event.id = Some(id);
+    let _ = tauri::Emitter::emit(app, crate::collectors::EVENT_LAG, &event);
     Ok(event)
+}
+
+/// 立即诊断:抓取当前状态生成一次事件(不入库时也返回给前端展示)
+#[tauri::command]
+pub fn diagnose_now(
+    app: tauri::AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Result<LagEvent, String> {
+    run_diagnose(&app, &state)
 }
 
 #[cfg(test)]

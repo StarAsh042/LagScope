@@ -13,7 +13,7 @@ use sysinfo::{Disks, Networks, ProcessesToUpdate, System};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::engine::{DetectorConfig, LagDetector};
+use crate::engine::LagDetector;
 use crate::state::AppState;
 
 pub const COLLECT_INTERVAL: Duration = Duration::from_millis(1000);
@@ -179,7 +179,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     }
     let mut prev_io: HashMap<u32, (u64, u64)> = HashMap::new();
     let mut prev_net: (u64, u64) = (0, 0);
-    let mut detector = LagDetector::new(DetectorConfig::default());
+    let mut detector = LagDetector::new();
     // 挂起窗口检测在独立线程(检测调用最坏阻塞 2s/窗口,不能占用采样线程)
     let hung_watch = hung_window::HungWatch::start();
     thread::sleep(COLLECT_INTERVAL);
@@ -258,8 +258,9 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         *state.processes.lock().unwrap() = processes.clone();
         let _ = app.emit(EVENT_METRICS, &sample);
 
-        // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端
-        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot()) {
+        // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
+        let cfg = state.config.lock().unwrap().clone();
+        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot(), &cfg) {
             let mut ev = event;
             match state.db.insert_event(&ev) {
                 Ok(id) => ev.id = Some(id),

@@ -6,6 +6,7 @@
   import Gauge from "$lib/components/Gauge.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
+  import SettingsPanel from "$lib/components/SettingsPanel.svelte";
   import {
     fmtBytes,
     fmtBytesPerSec,
@@ -19,7 +20,7 @@
   } from "$lib/stores/lagEvents.svelte";
   import type { MetricSample } from "$lib/types";
 
-  let tab = $state<"dashboard" | "events">("dashboard");
+  let tab = $state<"dashboard" | "events" | "settings">("dashboard");
 
   onMount(() => {
     void startMetrics();
@@ -104,6 +105,12 @@
           {#if lagEvents.list.length}
             <span class="badge">{lagEvents.list.length}</span>
           {/if}
+        </button>
+        <button
+          class:active={tab === "settings"}
+          onclick={() => (tab = "settings")}
+        >
+          设置
         </button>
       </nav>
     </div>
@@ -233,11 +240,13 @@
     </span>
     <span class="io-note">进程 I/O 含网络流量口径(sysinfo)</span>
   </footer>
-  {:else}
+  {:else if tab === "events"}
     <div class="events-view">
       <EventTimeline />
       <EventDetail />
     </div>
+  {:else}
+    <SettingsPanel />
   {/if}
 </main>
 

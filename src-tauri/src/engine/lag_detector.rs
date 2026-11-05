@@ -136,9 +136,8 @@ impl LagEvent {
     }
 }
 
-/// 检测器状态机(在采集线程中逐秒 feed)
+/// 检测器状态机(在采集线程中逐秒 feed;阈值由 feed 时传入,支持热更新)
 pub struct LagDetector {
-    config: DetectorConfig,
     /// 最近 15 秒样本
     window: VecDeque<MetricSample>,
     /// 各原因上次触发时间
@@ -148,10 +147,15 @@ pub struct LagDetector {
 
 const WINDOW_S: u64 = 15;
 
+impl Default for LagDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LagDetector {
-    pub fn new(config: DetectorConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             window: VecDeque::new(),
             last_fired: HashMap::new(),
             hung_cache: Vec::new(),
@@ -192,6 +196,7 @@ impl LagDetector {
         sample: MetricSample,
         processes: &[ProcessInfo],
         hung_windows: &[String],
+        config: &DetectorConfig,
     ) -> Option<LagEvent> {
         self.window.push_back(sample.clone());
         let cutoff = sample.ts_ms.saturating_sub(WINDOW_S * 1000);
@@ -200,7 +205,7 @@ impl LagDetector {
         }
         self.hung_cache = hung_windows.to_vec();
 
-        let cfg = &self.config;
+        let cfg = config;
         let mut reasons = Vec::new();
 
         if let Some(v) = self.sustained(cfg.cpu_sustain_s, |s| {
@@ -318,12 +323,13 @@ mod tests {
 
     #[test]
     fn cpu_sustained_triggers_event() {
-        let mut det = LagDetector::new(DetectorConfig::default());
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..14u64 {
             let s = sample(base + i * 1000, 95.0);
-            if let Some(ev) = det.feed(s, &[], &[]) {
+            if let Some(ev) = det.feed(s, &[], &[], &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -338,11 +344,12 @@ mod tests {
 
     #[test]
     fn cooldown_blocks_repeat() {
-        let mut det = LagDetector::new(DetectorConfig::default());
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         let mut first = None;
         for i in 0..14u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[]) {
+            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], &cfg) {
                 first = Some(ev);
                 break;
             }
@@ -350,17 +357,18 @@ mod tests {
         assert!(first.is_some());
         // 冷却期内继续满载,不应再触发
         for i in 14..40u64 {
-            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[]);
+            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], &cfg);
             assert!(ev.is_none(), "冷却期内不应重复触发: {ev:?}");
         }
     }
 
     #[test]
     fn moderate_load_no_event() {
-        let mut det = LagDetector::new(DetectorConfig::default());
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         for i in 0..20u64 {
-            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[]);
+            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], &cfg);
             assert!(ev.is_none(), "中等负载不应触发: {ev:?}");
         }
     }
@@ -368,11 +376,12 @@ mod tests {
     #[test]
     fn slow_tick_still_triggers() {
         // 采集 tick 慢于 1s(如 1.4s)时也应能触发(回归:旧逻辑按样本数判定会永不满足)
-        let mut det = LagDetector::new(DetectorConfig::default());
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..20u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[]) {
+            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], &cfg) {
                 fired = Some(ev);
                 break;
             }
