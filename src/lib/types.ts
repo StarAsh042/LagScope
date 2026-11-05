@@ -53,3 +53,27 @@ export interface DiskInfo {
   total: number;
   free: number;
 }
+
+export interface LagReason {
+  /** cpu | mem_pressure | page_faults | disk_latency | interrupt | hung_window | manual */
+  kind: string;
+  detail: string;
+  value: number;
+}
+
+export interface TopProc {
+  pid: number;
+  name: string;
+  value: number;
+}
+
+export interface LagEvent {
+  id: number | null;
+  tsMs: number;
+  reasons: LagReason[];
+  counters: MetricSample;
+  topCpu: TopProc[];
+  topMem: TopProc[];
+  topDisk: TopProc[];
+  hungWindows: string[];
+}

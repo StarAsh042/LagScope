@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import EventDetail from "$lib/components/EventDetail.svelte";
+  import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
@@ -10,10 +12,18 @@
     metrics,
     startMetrics,
   } from "$lib/stores/metrics.svelte";
+  import {
+    diagnoseNow,
+    lagEvents,
+    startLagEvents,
+  } from "$lib/stores/lagEvents.svelte";
   import type { MetricSample } from "$lib/types";
+
+  let tab = $state<"dashboard" | "events">("dashboard");
 
   onMount(() => {
     void startMetrics();
+    void startLagEvents();
   });
 
   // uPlot AlignedData 为列主序:[xs, ys1, ys2, ...]
@@ -80,13 +90,37 @@
 
 <main>
   <header>
-    <h1>LagScope <span class="zh">卡顿透视</span></h1>
-    <span class="status" class:on={metrics.connected}>
-      {metrics.connected ? "● 采集中" : "○ 连接中…"}
-    </span>
+    <div class="brand">
+      <h1>LagScope <span class="zh">卡顿透视</span></h1>
+      <nav>
+        <button
+          class:active={tab === "dashboard"}
+          onclick={() => (tab = "dashboard")}
+        >
+          仪表盘
+        </button>
+        <button class:active={tab === "events"} onclick={() => (tab = "events")}>
+          卡顿事件
+          {#if lagEvents.list.length}
+            <span class="badge">{lagEvents.list.length}</span>
+          {/if}
+        </button>
+      </nav>
+    </div>
+    <div class="right">
+      {#if tab === "events"}
+        <button class="diag" disabled={lagEvents.diagnosing} onclick={diagnoseNow}>
+          {lagEvents.diagnosing ? "诊断中…" : "立即诊断"}
+        </button>
+      {/if}
+      <span class="status" class:on={metrics.connected}>
+        {metrics.connected ? "● 采集中" : "○ 连接中…"}
+      </span>
+    </div>
   </header>
 
-  <section class="gauges">
+  {#if tab === "dashboard"}
+    <section class="gauges">
     <Gauge label="CPU" value={metrics.latest?.cpuTotal ?? null} sub={cpuSub} />
     <Gauge
       label="内存"
@@ -199,6 +233,12 @@
     </span>
     <span class="io-note">进程 I/O 含网络流量口径(sysinfo)</span>
   </footer>
+  {:else}
+    <div class="events-view">
+      <EventTimeline />
+      <EventDetail />
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -211,8 +251,13 @@
   }
   header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 20px;
   }
   h1 {
     font-size: 18px;
@@ -225,12 +270,71 @@
     font-weight: 400;
     margin-left: 6px;
   }
+  nav {
+    display: flex;
+    gap: 6px;
+  }
+  nav button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 5px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  nav button:hover {
+    color: var(--text);
+    background: #1a2130;
+  }
+  nav button.active {
+    color: var(--text);
+    background: #1a2130;
+    border-color: var(--border);
+  }
+  .badge {
+    display: inline-block;
+    margin-left: 6px;
+    background: var(--err, #e5484d);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 8px;
+    padding: 1px 6px;
+    vertical-align: middle;
+  }
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .diag {
+    background: #3b6cd4;
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .diag:hover {
+    background: #4a7be0;
+  }
+  .diag:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
   .status {
     font-size: 12px;
     color: var(--text-dim);
   }
   .status.on {
     color: var(--ok);
+  }
+  .events-view {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
   }
   .gauges {
     display: flex;
