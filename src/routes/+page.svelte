@@ -291,6 +291,8 @@
     height: 100vh;
     padding: 12px 16px;
     gap: 12px;
+    /* 内容超高时可纵向滚动,避免底部被裁切 */
+    overflow-y: auto;
   }
   header {
     display: flex;
@@ -389,7 +391,8 @@
   .events-view {
     display: flex;
     gap: 12px;
-    flex: 1;
+    /* 滚动容器内保证最小高度,内部各自滚动 */
+    flex: 1 0 480px;
     min-height: 0;
   }
   .gauges {

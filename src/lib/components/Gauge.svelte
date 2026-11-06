@@ -50,7 +50,9 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    min-width: 96px;
+    /* 固定宽度:副标题文字变化时不会引起整排表盘左右抖动 */
+    width: 118px;
+    flex: none;
   }
   svg {
     width: 84px;
@@ -95,5 +97,8 @@
     font-size: 11px;
     color: var(--text-dim, #8b94a7);
     white-space: nowrap;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

@@ -138,8 +138,9 @@
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    flex: 1;
+    /* 主界面可滚动:至少 340px 高,空间充足时撑满剩余 */
+    flex: 1 0 340px;
+    min-height: 340px;
   }
   .toolbar {
     display: flex;

@@ -118,7 +118,7 @@
 
 <style>
   .panel {
-    flex: 1;
+    flex: 1 0 480px;
     background: var(--panel, #131926);
     border: 1px solid var(--border, #232a3a);
     border-radius: 10px;
