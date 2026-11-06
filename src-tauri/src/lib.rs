@@ -5,6 +5,7 @@ mod commands;
 mod engine;
 mod settings;
 mod state;
+mod startup;
 mod store;
 
 use std::sync::Arc;
@@ -148,6 +149,8 @@ pub fn run() {
             commands::toggle_mini,
             commands::hide_mini,
             commands::show_main,
+            startup::get_startup_items,
+            startup::set_startup_enabled,
             settings::get_settings,
             settings::set_settings
         ])

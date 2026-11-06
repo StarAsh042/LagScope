@@ -9,6 +9,7 @@
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import StartupPanel from "$lib/components/StartupPanel.svelte";
   import {
     fmtBytes,
     fmtBytesPerSec,
@@ -22,7 +23,7 @@
   } from "$lib/stores/lagEvents.svelte";
   import type { MetricSample } from "$lib/types";
 
-  let tab = $state<"dashboard" | "events" | "settings">("dashboard");
+  let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
 
   onMount(() => {
     void startMetrics();
@@ -119,6 +120,12 @@
           {#if lagEvents.list.length}
             <span class="badge">{lagEvents.list.length}</span>
           {/if}
+        </button>
+        <button
+          class:active={tab === "startup"}
+          onclick={() => (tab = "startup")}
+        >
+          启动项
         </button>
         <button
           class:active={tab === "settings"}
@@ -279,6 +286,8 @@
       <EventTimeline />
       <EventDetail />
     </div>
+  {:else if tab === "startup"}
+    <StartupPanel />
   {:else}
     <SettingsPanel />
   {/if}

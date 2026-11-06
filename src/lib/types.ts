@@ -77,6 +77,25 @@ export interface GameSample {
   stutters: number;
 }
 
+export type StartupSource =
+  | "userRun"
+  | "machineRun"
+  | "machineRunWow"
+  | "userFolder"
+  | "commonFolder";
+
+export interface StartupItem {
+  name: string;
+  source: StartupSource;
+  sourceLabel: string;
+  command: string;
+  target: string | null;
+  targetExists: boolean;
+  targetSize: number | null;
+  enabled: boolean;
+  advice: string;
+}
+
 export interface LagEvent {
   id: number | null;
   tsMs: number;

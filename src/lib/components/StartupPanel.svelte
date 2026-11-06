@@ -1,0 +1,292 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+
+  import { invoke } from "@tauri-apps/api/core";
+
+  import type { StartupItem } from "$lib/types";
+
+  let items = $state<StartupItem[]>([]);
+  let loading = $state(true);
+  let errMsg = $state("");
+  let busy = $state("");
+  let search = $state("");
+
+  async function load() {
+    loading = true;
+    errMsg = "";
+    try {
+      items = await invoke<StartupItem[]>("get_startup_items");
+    } catch (e) {
+      errMsg = String(e);
+    } finally {
+      loading = false;
+    }
+  }
+  onMount(load);
+
+  const view = $derived.by(() => {
+    const kw = search.trim().toLowerCase();
+    return kw
+      ? items.filter(
+          (i) =>
+            i.name.toLowerCase().includes(kw) ||
+            i.command.toLowerCase().includes(kw)
+        )
+      : items;
+  });
+
+  const leftovers = $derived(
+    items.filter((i) => i.enabled && !i.targetExists).length
+  );
+  const disabledCount = $derived(items.filter((i) => !i.enabled).length);
+
+  function fmtSize(bytes: number | null): string {
+    if (bytes == null) return "--";
+    if (bytes >= 1024 ** 2) return (bytes / 1024 ** 2).toFixed(1) + " MB";
+    if (bytes >= 1024) return (bytes / 1024).toFixed(0) + " KB";
+    return bytes + " B";
+  }
+
+  async function toggle(item: StartupItem) {
+    busy = item.name;
+    errMsg = "";
+    try {
+      await invoke("set_startup_enabled", {
+        source: item.source,
+        name: item.name,
+        enabled: !item.enabled,
+      });
+      await load();
+    } catch (e) {
+      errMsg = String(e);
+    } finally {
+      busy = "";
+    }
+  }
+</script>
+
+<div class="panel">
+  <div class="head">
+    <span>启动项({items.length})</span>
+    <span class="stats">
+      残留 {leftovers} · 已禁用 {disabledCount}
+      <button class="refresh" onclick={load}>刷新</button>
+    </span>
+  </div>
+  <input class="search" type="search" placeholder="搜索名称或命令…" bind:value={search} />
+  {#if errMsg}
+    <div class="err">{errMsg}</div>
+  {/if}
+  {#if loading}
+    <div class="loading">扫描中…</div>
+  {:else}
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>来源</th>
+            <th>命令 / 目标</th>
+            <th class="num">大小</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each view as it (it.source + it.name)}
+            <tr>
+              <td>
+                {it.name}
+                {#if it.enabled && !it.targetExists}
+                  <span class="badge warn">残留</span>
+                {/if}
+              </td>
+              <td class="dim">{it.sourceLabel}</td>
+              <td class="cmd" title={it.command}>
+                {it.target ?? it.command}
+                {#if !it.targetExists}<span class="missing">(缺失)</span>{/if}
+              </td>
+              <td class="num">{fmtSize(it.targetSize)}</td>
+              <td>
+                {#if it.enabled}
+                  <span class="state on">启用</span>
+                {:else}
+                  <span class="state off">已禁用</span>
+                {/if}
+              </td>
+              <td>
+                {#if it.source === "userRun"}
+                  <button
+                    class="act"
+                    disabled={busy === it.name}
+                    onclick={() => toggle(it)}
+                  >
+                    {busy === it.name ? "…" : it.enabled ? "禁用" : "启用"}
+                  </button>
+                {:else}
+                  <span class="dim" title={it.advice}>{it.advice || "—"}</span>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
+  <div class="note">
+    禁用/启用通过 Explorer StartupApproved 键实现,与任务管理器"启动应用"一致;
+    系统级(HKLM)项目修改需要管理员权限。
+  </div>
+</div>
+
+<style>
+  .panel {
+    flex: 1 0 480px;
+    background: var(--panel, #131926);
+    border: 1px solid var(--border, #232a3a);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .stats {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-dim, #8b94a7);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .refresh {
+    background: transparent;
+    border: 1px solid var(--border, #232a3a);
+    color: var(--text-dim, #8b94a7);
+    border-radius: 6px;
+    font-size: 11.5px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .refresh:hover {
+    color: var(--text, #e8ecf4);
+  }
+  .search {
+    background: var(--bg, #0d1220);
+    border: 1px solid var(--border, #232a3a);
+    color: var(--text, #e8ecf4);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    width: 260px;
+    outline: none;
+  }
+  .search:focus {
+    border-color: #3b6cd4;
+  }
+  .err {
+    color: var(--err, #e5484d);
+    font-size: 12px;
+  }
+  .loading {
+    color: var(--text-dim, #8b94a7);
+    font-size: 12.5px;
+    padding: 20px;
+    text-align: center;
+  }
+  .scroll {
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--panel, #131926);
+    color: var(--text-dim, #8b94a7);
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border, #232a3a);
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: 1;
+  }
+  th.num {
+    text-align: right;
+  }
+  td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #1a2130;
+    color: var(--text, #e8ecf4);
+    white-space: nowrap;
+  }
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  td.cmd {
+    max-width: 380px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-dim, #b7c0d4);
+  }
+  tr:hover td {
+    background: #1a2130;
+  }
+  .dim {
+    color: var(--text-dim, #8b94a7);
+  }
+  .missing {
+    color: var(--err, #e5484d);
+  }
+  .badge.warn {
+    display: inline-block;
+    background: #3a2b12;
+    color: var(--warn, #f5a623);
+    border: 1px solid #6b4d16;
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 1px 5px;
+    margin-left: 6px;
+  }
+  .state.on {
+    color: var(--ok, #3dd68c);
+  }
+  .state.off {
+    color: var(--text-dim, #8b94a7);
+  }
+  .act {
+    background: transparent;
+    border: 1px solid #2f4a8a;
+    color: #7fa3ee;
+    border-radius: 5px;
+    font-size: 11px;
+    padding: 2px 10px;
+    cursor: pointer;
+  }
+  .act:hover {
+    background: #16203a;
+  }
+  .act:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .note {
+    font-size: 11px;
+    color: var(--text-dim, #8b94a7);
+    border-top: 1px solid var(--border, #232a3a);
+    padding-top: 6px;
+  }
+</style>
