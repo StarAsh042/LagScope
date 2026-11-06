@@ -64,6 +64,24 @@ pub fn run() {
             app.manage(state.clone());
             collectors::start(app.handle().clone(), state.clone());
 
+            // 预创建悬浮迷你窗(隐藏):避免在 command 中创建窗口导致的渲染问题
+            {
+                use tauri::WebviewUrl;
+                tauri::WebviewWindowBuilder::new(
+                    app,
+                    "mini",
+                    WebviewUrl::App("mini".into()),
+                )
+                .title("LagScope 悬浮窗")
+                .inner_size(300.0, 96.0)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(false)
+                .visible(false)
+                .build()?;
+            }
+
             // 帧监测(PresentMon):按设置启动
             if settings.enable_frame_monitor {
                 commands::set_frame_monitor(app.handle(), &state, true);
@@ -71,9 +89,10 @@ pub fn run() {
 
             // 托盘:左键切换窗口,右键菜单
             let show = MenuItem::with_id(app, "show", "显示 / 隐藏窗口", true, None::<&str>)?;
+            let mini = MenuItem::with_id(app, "mini", "悬浮窗", true, None::<&str>)?;
             let diagnose = MenuItem::with_id(app, "diagnose", "立即诊断", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出 LagScope", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &diagnose, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &mini, &diagnose, &quit])?;
             TrayIconBuilder::with_id("lagscope-tray")
                 .icon(app.default_window_icon().expect("缺少应用图标").clone())
                 .tooltip("LagScope 卡顿透视")
@@ -81,6 +100,11 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "show" => toggle_main_window(app),
+                    "mini" => {
+                        if let Err(e) = commands::toggle_mini(app.clone()) {
+                            eprintln!("[tray] 悬浮窗切换失败: {e}");
+                        }
+                    }
                     "diagnose" => {
                         let state = app.state::<Arc<AppState>>();
                         if let Err(e) = commands::run_diagnose(app, &state) {
@@ -121,6 +145,9 @@ pub fn run() {
             commands::kill_process,
             commands::list_lag_events,
             commands::diagnose_now,
+            commands::toggle_mini,
+            commands::hide_mini,
+            commands::show_main,
             settings::get_settings,
             settings::set_settings
         ])

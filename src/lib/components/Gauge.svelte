@@ -23,15 +23,18 @@
 
 <div class="gauge">
   <svg viewBox="0 0 90 90">
-    <circle class="track" cx="45" cy="45" r={R} />
-    <circle
-      class="bar"
-      cx="45"
-      cy="45"
-      r={R}
-      stroke={color}
-      stroke-dasharray="{(pct / 100) * CIRC} {CIRC}"
-    />
+    <!-- 只旋转圆环(进度弧从顶部起),文字保持水平 -->
+    <g transform="rotate(-90 45 45)">
+      <circle class="track" cx="45" cy="45" r={R} />
+      <circle
+        class="bar"
+        cx="45"
+        cy="45"
+        r={R}
+        stroke={color}
+        stroke-dasharray="{(pct / 100) * CIRC} {CIRC}"
+      />
+    </g>
     <text x="45" y="43" class="num">{rawText ?? (value == null ? "--" : Math.round(pct))}</text>
     <text x="45" y="56" class="unit">{rawText != null || value == null ? "" : "%"}</text>
   </svg>
@@ -52,7 +55,6 @@
   svg {
     width: 84px;
     height: 84px;
-    transform: rotate(-90deg);
   }
   circle {
     fill: none;

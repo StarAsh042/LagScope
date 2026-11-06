@@ -30,6 +30,56 @@ pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enab
     }
 }
 
+/// 悬浮迷你窗:启动时已预创建(隐藏),这里只做显示/隐藏切换
+#[tauri::command]
+pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
+    match app.get_webview_window("mini") {
+        Some(w) => {
+            if w.is_visible().unwrap_or(false) {
+                w.hide().map_err(|e| e.to_string())
+            } else {
+                w.show().map_err(|e| e.to_string())?;
+                w.set_focus().map_err(|e| e.to_string())
+            }
+        }
+        // 理论上不会走到(setup 已预创建);兜底再建一次
+        None => {
+            use tauri::WebviewUrl;
+            tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
+                .title("LagScope 悬浮窗")
+                .inner_size(300.0, 96.0)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(false)
+                .build()
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }
+    }
+}
+
+/// 隐藏悬浮窗(供迷你窗 ✕ 按钮)
+#[tauri::command]
+pub fn hide_mini(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("mini") {
+        w.hide().map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+/// 显示主窗口(供迷你窗点击跳转)
+#[tauri::command]
+pub fn show_main(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("main") {
+        w.show().map_err(|e| e.to_string())?;
+        w.set_focus().map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
 /// 最新进程快照(1Hz 由采集线程刷新,进程表每 2s 拉取)
 #[tauri::command]
 pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Vec<ProcessInfo> {

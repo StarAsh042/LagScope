@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import { invoke } from "@tauri-apps/api/core";
+
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
@@ -132,6 +134,9 @@
           {lagEvents.diagnosing ? "诊断中…" : "立即诊断"}
         </button>
       {/if}
+      <button class="mini-toggle" onclick={() => invoke("toggle_mini")}>
+        悬浮窗
+      </button>
       <span class="status" class:on={metrics.connected}>
         {metrics.connected ? "● 采集中" : "○ 连接中…"}
       </span>
@@ -360,6 +365,19 @@
   .diag:disabled {
     opacity: 0.6;
     cursor: default;
+  }
+  .mini-toggle {
+    background: transparent;
+    border: 1px solid var(--border, #232a3a);
+    color: var(--text-dim, #8b94a7);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .mini-toggle:hover {
+    color: var(--text, #e8ecf4);
+    border-color: #3b6cd4;
   }
   .status {
     font-size: 12px;
