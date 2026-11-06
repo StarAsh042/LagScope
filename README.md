@@ -57,8 +57,10 @@ npm run tauri build    # 打包安装程序(release)
 
 ## v2 路线图
 
-- [ ] PresentMon(MIT)子进程集成:游戏帧率骤降/卡帧检测
+- [x] PresentMon(2.6.0,MIT)子进程集成:帧率/最大帧间隔曲线,渲染大户卡帧归因(v0.2.0)
 - [ ] ETW 按驱动归因 DPC/延迟(定位具体驱动)
 - [ ] 悬浮迷你窗
 - [ ] 硬件温度(LibreHardwareMonitor 思路)
 - [ ] 启动项分析与清理建议
+
+> 帧监测说明:集成 [Intel PresentMon](https://github.com/GameTechDev/PresentMon)(MIT)CLI,`src-tauri/extras/PresentMon.exe` 经 `--output_stdout --v1_metrics` 流式解析(无磁盘写入);2.3.1 起 ETW 采集无需管理员权限;可在设置中开关,随应用退出终止。
