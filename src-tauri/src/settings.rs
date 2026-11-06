@@ -26,6 +26,8 @@ pub struct Settings {
     // 行为
     pub close_to_tray: bool,
     pub autostart: bool,
+    /// PresentMon 帧卡顿监测
+    pub enable_frame_monitor: bool,
 }
 
 impl Default for Settings {
@@ -42,6 +44,7 @@ impl Default for Settings {
             cooldown_s: c.cooldown_ms / 1000,
             close_to_tray: true,
             autostart: false,
+            enable_frame_monitor: true,
         }
     }
 }
@@ -57,6 +60,7 @@ impl Settings {
             disk_sustain_s: self.disk_sustain_s,
             interrupt_pct: self.interrupt_pct,
             interrupt_sustain_s: 5,
+            stutter_gap_ms: 100.0,
             cooldown_ms: self.cooldown_s * 1000,
         }
     }
@@ -101,6 +105,9 @@ pub fn set_settings(
     // 热更新检测器
     *state.config.lock().unwrap() = settings.to_detector_config();
     *state.close_to_tray.lock().unwrap() = settings.close_to_tray;
+
+    // 帧监测开关
+    crate::commands::set_frame_monitor(&app, &state, settings.enable_frame_monitor);
 
     // 开机自启
     use tauri_plugin_autostart::ManagerExt;

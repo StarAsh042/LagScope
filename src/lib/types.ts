@@ -67,6 +67,16 @@ export interface TopProc {
   value: number;
 }
 
+export interface GameSample {
+  tsMs: number;
+  app: string;
+  pid: number;
+  fps: number;
+  avgGapMs: number;
+  maxGapMs: number;
+  stutters: number;
+}
+
 export interface LagEvent {
   id: number | null;
   tsMs: number;
@@ -76,4 +86,5 @@ export interface LagEvent {
   topMem: TopProc[];
   topDisk: TopProc[];
   hungWindows: string[];
+  game: GameSample | null;
 }

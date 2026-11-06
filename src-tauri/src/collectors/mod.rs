@@ -3,6 +3,7 @@
 
 pub mod hung_window;
 pub mod pdh;
+pub mod presentmon;
 
 use std::collections::HashMap;
 use std::thread;
@@ -19,6 +20,7 @@ use crate::state::AppState;
 pub const COLLECT_INTERVAL: Duration = Duration::from_millis(1000);
 pub const EVENT_METRICS: &str = "metrics:sample";
 pub const EVENT_LAG: &str = "lag:event";
+pub const EVENT_GAME: &str = "game:sample";
 
 /// 一次采样:前端 1Hz 接收,同时是卡顿检测引擎的输入
 #[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
@@ -260,7 +262,14 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
 
         // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
         let cfg = state.config.lock().unwrap().clone();
-        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot(), &cfg) {
+        let game = {
+            let fm = state.frame_monitor.lock().unwrap();
+            fm.as_ref().and_then(|w| w.snapshot())
+        };
+        if let Some(g) = &game {
+            let _ = app.emit(EVENT_GAME, g);
+        }
+        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot(), game.as_ref(), &cfg) {
             let mut ev = event;
             match state.db.insert_event(&ev) {
                 Ok(id) => ev.id = Some(id),

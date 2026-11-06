@@ -2,12 +2,33 @@
 
 use sysinfo::Pid;
 
-use tauri::State;
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager, State};
 
 use crate::collectors::hung_window;
+use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
 use crate::state::AppState;
+
+/// 启动/停止 PresentMon 帧监测(设置开关与启动流程共用)
+pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enable: bool) {
+    let mut fm = state.frame_monitor.lock().unwrap();
+    if enable {
+        if fm.is_none() {
+            match app.path().resolve("extras/PresentMon.exe", BaseDirectory::Resource) {
+                Ok(p) if p.exists() => {
+                    *fm = Some(PresentMonWatch::start(&p));
+                }
+                Ok(p) => eprintln!("[presentmon] 未找到 PresentMon.exe: {}", p.display()),
+                Err(e) => eprintln!("[presentmon] 解析资源路径失败: {e}"),
+            }
+        }
+    } else {
+        // Drop 会终止子进程
+        *fm = None;
+    }
+}
 
 /// 最新进程快照(1Hz 由采集线程刷新,进程表每 2s 拉取)
 #[tauri::command]
@@ -61,13 +82,19 @@ pub fn run_diagnose(
         .ok_or_else(|| "暂无采样数据".to_string())?;
     let processes = state.processes.lock().unwrap().clone();
     let hung = hung_window::detect_hung_windows();
+    let game = state
+        .frame_monitor
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|w| w.snapshot());
     // 手动诊断只如实记录当前状态;若没有任何自动阈值命中,标记为 manual
     let reasons = vec![LagReason {
         kind: "manual".into(),
         detail: "手动触发诊断快照".into(),
         value: 0.0,
     }];
-    let mut event = LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung);
+    let mut event = LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung, game);
     let id = state.db.insert_event(&event)?;
     event.id = Some(id);
     let _ = tauri::Emitter::emit(app, crate::collectors::EVENT_LAG, &event);

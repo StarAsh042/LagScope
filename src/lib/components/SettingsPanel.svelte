@@ -14,6 +14,7 @@
     cooldownS: number;
     closeToTray: boolean;
     autostart: boolean;
+    enableFrameMonitor: boolean;
   }
 
   let s = $state<Settings | null>(null);
@@ -97,6 +98,10 @@
       <label class="check">
         <input type="checkbox" bind:checked={s.autostart} />
         <span>开机自动启动</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={s.enableFrameMonitor} />
+        <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
       </label>
     </div>
 

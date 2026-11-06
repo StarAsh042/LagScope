@@ -66,6 +66,7 @@ export const KIND_META: Record<string, { label: string; color: string }> = {
   disk_latency: { label: "磁盘延迟", color: "#d46cb4" },
   interrupt: { label: "中断高载", color: "#9a6cd4" },
   hung_window: { label: "窗口假死", color: "#3b6cd4" },
+  frame_stutter: { label: "游戏卡帧", color: "#3dd68c" },
   manual: { label: "手动诊断", color: "#8b94a7" },
 };
 

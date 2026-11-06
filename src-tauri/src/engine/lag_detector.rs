@@ -26,6 +26,8 @@ pub struct DetectorConfig {
     pub interrupt_pct: f64,
     /// 中断需持续秒数
     pub interrupt_sustain_s: u64,
+    /// 帧间隔尖峰阈值 ms(超过视为卡帧)
+    pub stutter_gap_ms: f64,
     /// 同类原因冷却毫秒
     pub cooldown_ms: u64,
 }
@@ -41,6 +43,7 @@ impl Default for DetectorConfig {
             disk_sustain_s: 5,
             interrupt_pct: 20.0,
             interrupt_sustain_s: 5,
+            stutter_gap_ms: 100.0,
             cooldown_ms: 60_000,
         }
     }
@@ -67,6 +70,23 @@ pub struct TopProc {
     pub value: f64,
 }
 
+/// 一秒的帧统计(来源 PresentMon,按帧数最多的渲染进程聚合)
+#[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameSample {
+    /// 统计窗口的起始秒
+    pub ts_ms: u64,
+    pub app: String,
+    pub pid: u32,
+    /// 该秒完成的帧数
+    pub fps: u32,
+    pub avg_gap_ms: f64,
+    /// 最大帧间隔(卡顿的直接表现)
+    pub max_gap_ms: f64,
+    /// 超过卡帧阈值的间隔次数
+    pub stutters: u32,
+}
+
 /// 一次卡顿事件:原因 + 全量计数器快照 + 各维度 Top 进程 + 挂起窗口
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +99,8 @@ pub struct LagEvent {
     pub top_mem: Vec<TopProc>,
     pub top_disk: Vec<TopProc>,
     pub hung_windows: Vec<String>,
+    /// 帧监测开启且当秒有渲染活动时存在
+    pub game: Option<GameSample>,
 }
 
 impl LagEvent {
@@ -89,6 +111,7 @@ impl LagEvent {
         counters: MetricSample,
         processes: &[ProcessInfo],
         hung_windows: Vec<String>,
+        game: Option<GameSample>,
     ) -> Self {
         let mut top_cpu: Vec<TopProc> = processes
             .iter()
@@ -132,6 +155,7 @@ impl LagEvent {
             top_mem,
             top_disk,
             hung_windows,
+            game,
         }
     }
 }
@@ -196,6 +220,7 @@ impl LagDetector {
         sample: MetricSample,
         processes: &[ProcessInfo],
         hung_windows: &[String],
+        game: Option<&GameSample>,
         config: &DetectorConfig,
     ) -> Option<LagEvent> {
         self.window.push_back(sample.clone());
@@ -276,6 +301,20 @@ impl LagDetector {
             });
         }
 
+        // 帧卡顿:持续渲染(fps>=45)的进程出现明显帧间隔尖峰。
+        // 单次尖峰即触发(卡顿本质是瞬时事件),靠冷却去重。
+        if let Some(g) = game
+            && g.fps >= 45 && g.max_gap_ms >= cfg.stutter_gap_ms {
+                reasons.push(LagReason {
+                    kind: "frame_stutter".into(),
+                    detail: format!(
+                        "{} 帧间隔尖峰 {:.0} ms(fps {},卡帧 {} 次)",
+                        g.app, g.max_gap_ms, g.fps, g.stutters
+                    ),
+                    value: g.max_gap_ms,
+                });
+            }
+
         // 冷却:同类原因冷却期内不重复触发
         reasons.retain(|r| {
             self.last_fired
@@ -297,6 +336,7 @@ impl LagDetector {
             sample,
             processes,
             self.hung_cache.clone(),
+            game.cloned(),
         ))
     }
 }
@@ -329,7 +369,7 @@ mod tests {
         let mut fired = None;
         for i in 0..14u64 {
             let s = sample(base + i * 1000, 95.0);
-            if let Some(ev) = det.feed(s, &[], &[], &cfg) {
+            if let Some(ev) = det.feed(s, &[], &[], None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -349,7 +389,7 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut first = None;
         for i in 0..14u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], &cfg) {
+            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, &cfg) {
                 first = Some(ev);
                 break;
             }
@@ -357,7 +397,7 @@ mod tests {
         assert!(first.is_some());
         // 冷却期内继续满载,不应再触发
         for i in 14..40u64 {
-            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], &cfg);
+            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, &cfg);
             assert!(ev.is_none(), "冷却期内不应重复触发: {ev:?}");
         }
     }
@@ -368,7 +408,7 @@ mod tests {
         let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         for i in 0..20u64 {
-            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], &cfg);
+            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], None, &cfg);
             assert!(ev.is_none(), "中等负载不应触发: {ev:?}");
         }
     }
@@ -381,12 +421,72 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..20u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], &cfg) {
+            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], None, &cfg) {
                 fired = Some(ev);
                 break;
             }
         }
         assert!(fired.is_some(), "慢 tick 下 CPU 满载应触发");
         assert!(fired.unwrap().reasons.iter().any(|r| r.kind == "cpu"));
+    }
+
+    #[test]
+    fn frame_stutter_triggers_on_gap_spike() {
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        let game = GameSample {
+            ts_ms: base,
+            app: "game.exe".into(),
+            pid: 1,
+            fps: 60,
+            avg_gap_ms: 16.7,
+            max_gap_ms: 320.0,
+            stutters: 2,
+        };
+        let ev = det
+            .feed(sample(base, 30.0), &[], &[], Some(&game), &cfg)
+            .expect("帧间隔尖峰应触发");
+        let r = ev
+            .reasons
+            .iter()
+            .find(|r| r.kind == "frame_stutter")
+            .expect("应包含 frame_stutter 原因");
+        assert!(r.detail.contains("game.exe"));
+        assert_eq!(ev.game.as_ref().unwrap().fps, 60);
+    }
+
+    #[test]
+    fn frame_stutter_ignores_low_fps_or_small_gap() {
+        let cfg = DetectorConfig::default();
+        let base: u64 = 1_793_000_000_000;
+        // 低 fps(非持续渲染)不触发
+        let mut det = LagDetector::new();
+        let idle = GameSample {
+            ts_ms: base,
+            app: "idle.exe".into(),
+            pid: 2,
+            fps: 5,
+            avg_gap_ms: 200.0,
+            max_gap_ms: 500.0,
+            stutters: 1,
+        };
+        assert!(det.feed(sample(base, 20.0), &[], &[], Some(&idle), &cfg).is_none());
+        // fps 高但间隔正常不触发
+        let mut det2 = LagDetector::new();
+        let smooth = GameSample {
+            ts_ms: base,
+            app: "game.exe".into(),
+            pid: 3,
+            fps: 60,
+            avg_gap_ms: 16.7,
+            max_gap_ms: 33.0,
+            stutters: 0,
+        };
+        assert!(
+            det2
+                .feed(sample(base, 20.0), &[], &[], Some(&smooth), &cfg)
+                .is_none()
+        );
     }
 }

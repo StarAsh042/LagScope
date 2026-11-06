@@ -87,6 +87,18 @@
       ? `${metrics.latest.cpuFreqMhz.toFixed(0)} MHz`
       : ""
   );
+
+  // 帧监测(PresentMon):渲染大户的每秒帧统计
+  const gameSub = $derived(
+    metrics.game
+      ? `${metrics.game.app} · 卡帧 ${metrics.game.stutters}`
+      : "无渲染活动"
+  );
+  const gameData = $derived(
+    toColumns(
+      metrics.gameHistory.map((g) => [g.tsMs / 1000, g.fps, g.maxGapMs])
+    )
+  );
 </script>
 
 <main>
@@ -160,6 +172,12 @@
       value={null}
       sub={netSub}
     />
+    <Gauge
+      label="帧率"
+      value={null}
+      rawText={metrics.game ? String(metrics.game.fps) : "--"}
+      sub={gameSub}
+    />
   </section>
 
   <section class="charts">
@@ -222,6 +240,17 @@
         { label: "硬缺页/s", color: "#f5a623" },
       ]}
     />
+    {#if metrics.gameHistory.length}
+      <RollingChart
+        title="帧率 / 最大帧间隔(渲染大户)"
+        data={gameData}
+        unit="FPS"
+        series={[
+          { label: "FPS", color: "#3dd68c" },
+          { label: "最大间隔 ms", color: "#e5484d" },
+        ]}
+      />
+    {/if}
   </section>
 
   <ProcessTable processes={metrics.processes} />

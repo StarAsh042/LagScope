@@ -1,13 +1,15 @@
 <script lang="ts">
-  // 环形仪表:0-100%
+  // 环形仪表:0-100%,或传入 rawText 显示自定义数值(如 FPS)
   let {
     label,
     value, // 0-100 或 null
     sub = "", // 副标题
+    rawText = undefined, // 自定义中央文本(如 "60")
   }: {
     label: string;
     value: number | null;
     sub?: string;
+    rawText?: string;
   } = $props();
 
   const R = 34;
@@ -30,8 +32,8 @@
       stroke={color}
       stroke-dasharray="{(pct / 100) * CIRC} {CIRC}"
     />
-    <text x="45" y="43" class="num">{value == null ? "--" : Math.round(pct)}</text>
-    <text x="45" y="56" class="unit">{value == null ? "" : "%"}</text>
+    <text x="45" y="43" class="num">{rawText ?? (value == null ? "--" : Math.round(pct))}</text>
+    <text x="45" y="56" class="unit">{rawText != null || value == null ? "" : "%"}</text>
   </svg>
   <div class="meta">
     <span class="label">{label}</span>

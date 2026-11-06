@@ -62,7 +62,12 @@ pub fn run() {
                 settings.close_to_tray,
             ));
             app.manage(state.clone());
-            collectors::start(app.handle().clone(), state);
+            collectors::start(app.handle().clone(), state.clone());
+
+            // 帧监测(PresentMon):按设置启动
+            if settings.enable_frame_monitor {
+                commands::set_frame_monitor(app.handle(), &state, true);
+            }
 
             // 托盘:左键切换窗口,右键菜单
             let show = MenuItem::with_id(app, "show", "显示 / 隐藏窗口", true, None::<&str>)?;

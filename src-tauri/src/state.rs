@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use sysinfo::System;
 
+use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::DetectorConfig;
 use crate::store::Db;
@@ -23,6 +24,8 @@ pub struct AppState {
     pub config: Mutex<DetectorConfig>,
     /// 关窗是否隐藏到托盘
     pub close_to_tray: Mutex<bool>,
+    /// PresentMon 帧监测(Some = 运行中)
+    pub frame_monitor: Mutex<Option<PresentMonWatch>>,
 }
 
 impl AppState {
@@ -36,6 +39,7 @@ impl AppState {
             db,
             config: Mutex::new(config),
             close_to_tray: Mutex::new(close_to_tray),
+            frame_monitor: Mutex::new(None),
         }
     }
 }

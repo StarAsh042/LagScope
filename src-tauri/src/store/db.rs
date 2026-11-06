@@ -29,6 +29,8 @@ impl Db {
              CREATE INDEX IF NOT EXISTS idx_lag_events_ts ON lag_events(ts_ms DESC);",
         )
         .map_err(|e| format!("初始化表失败: {e}"))?;
+        // 迁移:游戏帧字段(v0.2.0 新增,旧行为 NULL)
+        let _ = conn.execute_batch("ALTER TABLE lag_events ADD COLUMN game_json TEXT;");
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -38,8 +40,8 @@ impl Db {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT INTO lag_events
-             (ts_ms, reasons_json, counters_json, top_cpu_json, top_mem_json, top_disk_json, hung_windows_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (ts_ms, reasons_json, counters_json, top_cpu_json, top_mem_json, top_disk_json, hung_windows_json, game_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 e.ts_ms as i64,
                 serde_json::to_string(&e.reasons).map_err(|err| err.to_string())?,
@@ -48,6 +50,11 @@ impl Db {
                 serde_json::to_string(&e.top_mem).map_err(|err| err.to_string())?,
                 serde_json::to_string(&e.top_disk).map_err(|err| err.to_string())?,
                 serde_json::to_string(&e.hung_windows).map_err(|err| err.to_string())?,
+                e.game
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(|err| err.to_string())?,
             ],
         )
         .map_err(|err| format!("插入事件失败: {err}"))?;
@@ -59,7 +66,7 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 "SELECT id, ts_ms, reasons_json, counters_json,
-                        top_cpu_json, top_mem_json, top_disk_json, hung_windows_json
+                        top_cpu_json, top_mem_json, top_disk_json, hung_windows_json, game_json
                  FROM lag_events ORDER BY ts_ms DESC LIMIT ?1",
             )
             .map_err(|err| err.to_string())?;
@@ -75,13 +82,14 @@ impl Db {
                     row.get::<_, String>(5)?,
                     row.get::<_, String>(6)?,
                     row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(8)?,
                 ))
             })
             .map_err(|err| err.to_string())?;
 
         let mut events = Vec::new();
         for row in rows {
-            let (id, ts_ms, reasons, counters, top_cpu, top_mem, top_disk, hung) =
+            let (id, ts_ms, reasons, counters, top_cpu, top_mem, top_disk, hung, game) =
                 row.map_err(|err| err.to_string())?;
             events.push(LagEvent {
                 id: Some(id),
@@ -92,6 +100,7 @@ impl Db {
                 top_mem: serde_json::from_str(&top_mem).unwrap_or_default(),
                 top_disk: serde_json::from_str(&top_disk).unwrap_or_default(),
                 hung_windows: serde_json::from_str(&hung).unwrap_or_default(),
+                game: game.and_then(|g| serde_json::from_str(&g).ok()),
             });
         }
         Ok(events)

@@ -4,7 +4,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-import type { DiskInfo, MetricSample, ProcessInfo } from "$lib/types";
+import type { DiskInfo, GameSample, MetricSample, ProcessInfo } from "$lib/types";
 
 /** 历史窗口:120 秒(1Hz) */
 export const HISTORY_LEN = 120;
@@ -14,6 +14,8 @@ export const metrics = $state({
   history: [] as MetricSample[],
   processes: [] as ProcessInfo[],
   disks: [] as DiskInfo[],
+  game: null as GameSample | null,
+  gameHistory: [] as GameSample[],
   connected: false,
 });
 
@@ -30,6 +32,15 @@ export async function startMetrics() {
     metrics.history.push(e.payload);
     if (metrics.history.length > HISTORY_LEN) {
       metrics.history.splice(0, metrics.history.length - HISTORY_LEN);
+    }
+  });
+
+  // 帧监测(PresentMon):有渲染活动时 1Hz
+  await listen<GameSample>("game:sample", (e) => {
+    metrics.game = e.payload;
+    metrics.gameHistory.push(e.payload);
+    if (metrics.gameHistory.length > HISTORY_LEN) {
+      metrics.gameHistory.splice(0, metrics.gameHistory.length - HISTORY_LEN);
     }
   });
 
