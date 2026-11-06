@@ -102,6 +102,13 @@
       metrics.gameHistory.map((g) => [g.tsMs / 1000, g.fps, g.maxGapMs])
     )
   );
+
+  // 温度表盘:分级变色(≥75 红 / ≥60 黄 / 其余绿)
+  const temp = $derived(metrics.latest?.temperatureC ?? null);
+  const tempRaw = $derived(temp == null ? undefined : `${Math.round(temp)}°`);
+  const tempColor = $derived(
+    temp == null ? undefined : temp >= 75 ? "#e5484d" : temp >= 60 ? "#f5a623" : "#3dd68c"
+  );
 </script>
 
 <main>
@@ -189,6 +196,13 @@
       value={null}
       rawText={metrics.game ? String(metrics.game.fps) : "--"}
       sub={gameSub}
+    />
+    <Gauge
+      label="温度"
+      value={null}
+      rawText={tempRaw}
+      colorOverride={tempColor}
+      sub={temp == null ? "热区不可用" : "最热 ACPI 热区"}
     />
   </section>
 

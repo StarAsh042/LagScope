@@ -5,11 +5,13 @@
     value, // 0-100 或 null
     sub = "", // 副标题
     rawText = undefined, // 自定义中央文本(如 "60")
+    colorOverride = undefined, // 覆盖弧线颜色(如温度分级)
   }: {
     label: string;
     value: number | null;
     sub?: string;
     rawText?: string;
+    colorOverride?: string;
   } = $props();
 
   const R = 34;
@@ -17,7 +19,8 @@
 
   const pct = $derived(value == null ? 0 : Math.min(100, Math.max(0, value)));
   const color = $derived(
-    pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c"
+    colorOverride ??
+      (pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c")
   );
 </script>
 

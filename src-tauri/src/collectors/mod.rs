@@ -117,6 +117,7 @@ struct PdhSet<'a> {
     interrupt_pct: Option<pdh::Counter>,
     gpu_util: Option<pdh::Counter>,
     gpu_mem: Option<pdh::Counter>,
+    thermal: Option<pdh::Counter>,
 }
 
 impl<'a> PdhSet<'a> {
@@ -154,6 +155,7 @@ impl<'a> PdhSet<'a> {
             interrupt_pct: add(q, r"\Processor(_Total)\% Interrupt Time"),
             gpu_util: add(q, r"\GPU Engine(*engtype_3D)\Utilization Percentage"),
             gpu_mem: add(q, r"\GPU Adapter Memory(*)\Dedicated Usage"),
+            thermal: add(q, r"\Thermal Zone Information(*)\Temperature"),
         }
     }
 }
@@ -355,6 +357,19 @@ fn build_sample(
     if let Some(c) = &cs.gpu_mem {
         let sum: f64 = cs.q.read_instances(c).iter().map(|(_, v)| *v).sum();
         sample.gpu_mem_mb = Some(sum / 1024.0 / 1024.0);
+    }
+
+    // 热区温度:PDH cooked 值为开尔文(实测 329K≈55.9℃,与 WMI MSAcpi 一致),取最热区
+    if let Some(c) = &cs.thermal {
+        let max_k = cs
+            .q
+            .read_instances(c)
+            .iter()
+            .map(|(_, v)| *v)
+            .fold(0.0_f64, f64::max);
+        if max_k > 100.0 {
+            sample.temperature_c = Some((max_k - 273.15) as f32);
+        }
     }
 
     sample

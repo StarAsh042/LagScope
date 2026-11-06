@@ -61,6 +61,6 @@ npm run tauri build    # 打包安装程序(release)
 - [x] 启动项分析与清理:注册表 Run 键 + 启动文件夹扫描,禁用/启用(StartupApproved,与任务管理器同机制),残留项检测(v0.4.0)
 - [ ] ETW 按驱动归因 DPC/延迟(定位具体驱动)
 - [x] 悬浮迷你窗:置顶无边框小窗,CPU/内存/GPU/磁盘/网络/帧率迷你条,托盘与主窗口均可开关(v0.3.0)
-- [ ] 硬件温度(LibreHardwareMonitor 思路)
+- [x] 硬件温度:PDH `Thermal Zone Information` 热区温度(开尔文),仪表盘表盘显示并按阈值变色(v0.5.0)
 
 > 帧监测说明:集成 [Intel PresentMon](https://github.com/GameTechDev/PresentMon)(MIT)CLI,`src-tauri/extras/PresentMon.exe` 经 `--output_stdout --v1_metrics` 流式解析(无磁盘写入);2.3.1 起 ETW 采集无需管理员权限;可在设置中开关,随应用退出终止。
