@@ -1,6 +1,7 @@
 //! 指标采集层:后台线程 1Hz 轮询 sysinfo + PDH,
 //! 产出 [`MetricSample`](实时曲线)与 [`ProcessInfo`](进程表)缓存。
 
+pub mod dpc_etw;
 pub mod hung_window;
 pub mod pdh;
 pub mod presentmon;
@@ -21,6 +22,7 @@ pub const COLLECT_INTERVAL: Duration = Duration::from_millis(1000);
 pub const EVENT_METRICS: &str = "metrics:sample";
 pub const EVENT_LAG: &str = "lag:event";
 pub const EVENT_GAME: &str = "game:sample";
+pub const EVENT_DPC: &str = "dpc:sample";
 
 /// 一次采样:前端 1Hz 接收,同时是卡顿检测引擎的输入
 #[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
@@ -186,6 +188,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     let mut detector = LagDetector::new();
     // 挂起窗口检测在独立线程(检测调用最坏阻塞 2s/窗口,不能占用采样线程)
     let hung_watch = hung_window::HungWatch::start();
+    // ETW DPC 归因由设置层启停(state.dpc_watch),这里只读快照
     thread::sleep(COLLECT_INTERVAL);
 
     let mut tick: u64 = 0;
@@ -271,7 +274,21 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         if let Some(g) = &game {
             let _ = app.emit(EVENT_GAME, g);
         }
-        if let Some(event) = detector.feed(sample, &processes, &hung_watch.snapshot(), game.as_ref(), &cfg) {
+        let dpc = {
+            let w = state.dpc_watch.lock().unwrap();
+            w.as_ref().and_then(|w| w.snapshot())
+        };
+        if let Some(d) = &dpc {
+            let _ = app.emit(EVENT_DPC, d);
+        }
+        if let Some(event) = detector.feed(
+            sample,
+            &processes,
+            &hung_watch.snapshot(),
+            game.as_ref(),
+            dpc.as_ref(),
+            &cfg,
+        ) {
             let mut ev = event;
             match state.db.insert_event(&ev) {
                 Ok(id) => ev.id = Some(id),

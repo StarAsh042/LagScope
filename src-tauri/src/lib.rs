@@ -87,6 +87,10 @@ pub fn run() {
             if settings.enable_frame_monitor {
                 commands::set_frame_monitor(app.handle(), &state, true);
             }
+            // ETW DPC 归因:按设置启动(非管理员自动降级)
+            if settings.enable_dpc_watch {
+                commands::set_dpc_watch(&state, true);
+            }
 
             // 托盘:左键切换窗口,右键菜单
             let show = MenuItem::with_id(app, "show", "显示 / 隐藏窗口", true, None::<&str>)?;

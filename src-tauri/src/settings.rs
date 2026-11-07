@@ -28,6 +28,8 @@ pub struct Settings {
     pub autostart: bool,
     /// PresentMon 帧卡顿监测
     pub enable_frame_monitor: bool,
+    /// ETW DPC 驱动归因(需管理员)
+    pub enable_dpc_watch: bool,
 }
 
 impl Default for Settings {
@@ -45,6 +47,7 @@ impl Default for Settings {
             close_to_tray: true,
             autostart: false,
             enable_frame_monitor: true,
+            enable_dpc_watch: true,
         }
     }
 }
@@ -61,6 +64,7 @@ impl Settings {
             interrupt_pct: self.interrupt_pct,
             interrupt_sustain_s: 5,
             stutter_gap_ms: 100.0,
+            dpc_total_threshold: 8000.0,
             cooldown_ms: self.cooldown_s * 1000,
         }
     }
@@ -108,6 +112,8 @@ pub fn set_settings(
 
     // 帧监测开关
     crate::commands::set_frame_monitor(&app, &state, settings.enable_frame_monitor);
+    // DPC 归因开关
+    crate::commands::set_dpc_watch(&state, settings.enable_dpc_watch);
 
     // 开机自启
     use tauri_plugin_autostart::ManagerExt;

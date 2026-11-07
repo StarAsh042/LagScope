@@ -2,4 +2,4 @@
 
 pub mod lag_detector;
 
-pub use lag_detector::{DetectorConfig, GameSample, LagDetector, LagEvent, LagReason};
+pub use lag_detector::{DetectorConfig, DpcSample, GameSample, LagDetector, LagEvent, LagReason};

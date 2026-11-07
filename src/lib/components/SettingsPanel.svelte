@@ -15,6 +15,7 @@
     closeToTray: boolean;
     autostart: boolean;
     enableFrameMonitor: boolean;
+    enableDpcWatch: boolean;
   }
 
   let s = $state<Settings | null>(null);
@@ -102,6 +103,10 @@
       <label class="check">
         <input type="checkbox" bind:checked={s.enableFrameMonitor} />
         <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={s.enableDpcWatch} />
+        <span>DPC 驱动归因(ETW 内核跟踪,需管理员权限)</span>
       </label>
     </div>
 

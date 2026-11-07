@@ -96,6 +96,13 @@ export interface StartupItem {
   advice: string;
 }
 
+export interface DpcSample {
+  tsMs: number;
+  total: number;
+  /** 驱动名 → 计数,降序前 5 */
+  drivers: [string, number][];
+}
+
 export interface LagEvent {
   id: number | null;
   tsMs: number;
@@ -106,4 +113,5 @@ export interface LagEvent {
   topDisk: TopProc[];
   hungWindows: string[];
   game: GameSample | null;
+  dpcTop: DpcSample | null;
 }

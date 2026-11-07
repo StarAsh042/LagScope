@@ -59,7 +59,7 @@ npm run tauri build    # 打包安装程序(release)
 
 - [x] PresentMon(2.6.0,MIT)子进程集成:帧率/最大帧间隔曲线,渲染大户卡帧归因(v0.2.0)
 - [x] 启动项分析与清理:注册表 Run 键 + 启动文件夹扫描,禁用/启用(StartupApproved,与任务管理器同机制),残留项检测(v0.4.0)
-- [ ] ETW 按驱动归因 DPC/延迟(定位具体驱动)
+- [x] ETW 按驱动归因 DPC:ferrisetw 内核会话(PerfInfo DPC)+ NtQuerySystemInformation 模块表,高频 DPC 风暴自动归因到具体驱动(如 dxgkrnl.sys / nvlddmkm.sys),需管理员权限,失败自动降级(v0.6.0)
 - [x] 悬浮迷你窗:置顶无边框小窗,CPU/内存/GPU/磁盘/网络/帧率迷你条,托盘与主窗口均可开关(v0.3.0)
 - [x] 硬件温度:PDH `Thermal Zone Information` 热区温度(开尔文),仪表盘表盘显示并按阈值变色(v0.5.0)
 

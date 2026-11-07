@@ -28,6 +28,8 @@ pub struct DetectorConfig {
     pub interrupt_sustain_s: u64,
     /// 帧间隔尖峰阈值 ms(超过视为卡帧)
     pub stutter_gap_ms: f64,
+    /// DPC 总量阈值 次/秒(超过触发 dpc_driver 归因)
+    pub dpc_total_threshold: f64,
     /// 同类原因冷却毫秒
     pub cooldown_ms: u64,
 }
@@ -44,6 +46,7 @@ impl Default for DetectorConfig {
             interrupt_pct: 20.0,
             interrupt_sustain_s: 5,
             stutter_gap_ms: 100.0,
+            dpc_total_threshold: 8000.0,
             cooldown_ms: 60_000,
         }
     }
@@ -87,6 +90,17 @@ pub struct GameSample {
     pub stutters: u32,
 }
 
+/// 一秒的 DPC 驱动分布(来源内核 ETW,可独立触发 dpc_driver 事件)
+#[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DpcSample {
+    pub ts_ms: u64,
+    /// 该秒 DPC 事件总数
+    pub total: u32,
+    /// 驱动名 → 计数,降序前 5
+    pub drivers: Vec<(String, u32)>,
+}
+
 /// 一次卡顿事件:原因 + 全量计数器快照 + 各维度 Top 进程 + 挂起窗口
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,6 +115,8 @@ pub struct LagEvent {
     pub hung_windows: Vec<String>,
     /// 帧监测开启且当秒有渲染活动时存在
     pub game: Option<GameSample>,
+    /// ETW DPC 监测可用时存在
+    pub dpc_top: Option<DpcSample>,
 }
 
 impl LagEvent {
@@ -112,6 +128,7 @@ impl LagEvent {
         processes: &[ProcessInfo],
         hung_windows: Vec<String>,
         game: Option<GameSample>,
+        dpc_top: Option<DpcSample>,
     ) -> Self {
         let mut top_cpu: Vec<TopProc> = processes
             .iter()
@@ -156,6 +173,7 @@ impl LagEvent {
             top_disk,
             hung_windows,
             game,
+            dpc_top,
         }
     }
 }
@@ -221,6 +239,7 @@ impl LagDetector {
         processes: &[ProcessInfo],
         hung_windows: &[String],
         game: Option<&GameSample>,
+        dpc: Option<&DpcSample>,
         config: &DetectorConfig,
     ) -> Option<LagEvent> {
         self.window.push_back(sample.clone());
@@ -315,6 +334,29 @@ impl LagDetector {
                 });
             }
 
+        // DPC 风暴:高频 DPC 且可归因到具体驱动(瞬时事件,靠冷却去重)
+        if let Some(d) = dpc
+            && d.total as f64 >= cfg.dpc_total_threshold {
+                let (top_name, top_count) = d
+                    .drivers
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| ("未知".into(), 0));
+                let pct = if d.total > 0 {
+                    (top_count as f64 / d.total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                reasons.push(LagReason {
+                    kind: "dpc_driver".into(),
+                    detail: format!(
+                        "DPC {}/秒,主要来自 {}(占 {:.0}%)",
+                        d.total, top_name, pct
+                    ),
+                    value: d.total as f64,
+                });
+            }
+
         // 冷却:同类原因冷却期内不重复触发
         reasons.retain(|r| {
             self.last_fired
@@ -337,6 +379,7 @@ impl LagDetector {
             processes,
             self.hung_cache.clone(),
             game.cloned(),
+            dpc.cloned(),
         ))
     }
 }
@@ -369,7 +412,7 @@ mod tests {
         let mut fired = None;
         for i in 0..14u64 {
             let s = sample(base + i * 1000, 95.0);
-            if let Some(ev) = det.feed(s, &[], &[], None, &cfg) {
+            if let Some(ev) = det.feed(s, &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -389,7 +432,7 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut first = None;
         for i in 0..14u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, &cfg) {
+            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg) {
                 first = Some(ev);
                 break;
             }
@@ -397,7 +440,7 @@ mod tests {
         assert!(first.is_some());
         // 冷却期内继续满载,不应再触发
         for i in 14..40u64 {
-            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, &cfg);
+            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg);
             assert!(ev.is_none(), "冷却期内不应重复触发: {ev:?}");
         }
     }
@@ -408,7 +451,7 @@ mod tests {
         let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         for i in 0..20u64 {
-            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], None, &cfg);
+            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], None, None, &cfg);
             assert!(ev.is_none(), "中等负载不应触发: {ev:?}");
         }
     }
@@ -421,13 +464,57 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..20u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], None, &cfg) {
+            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
         }
         assert!(fired.is_some(), "慢 tick 下 CPU 满载应触发");
         assert!(fired.unwrap().reasons.iter().any(|r| r.kind == "cpu"));
+    }
+
+    #[test]
+    fn dpc_driver_triggers_on_storm() {
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        let dpc = DpcSample {
+            ts_ms: base,
+            total: 12000,
+            drivers: vec![
+                ("nvlddmkm.sys".into(), 9000),
+                ("ndis.sys".into(), 2000),
+                ("ACPI.sys".into(), 1000),
+            ],
+        };
+        let ev = det
+            .feed(sample(base, 30.0), &[], &[], None, Some(&dpc), &cfg)
+            .expect("DPC 风暴应触发");
+        let r = ev
+            .reasons
+            .iter()
+            .find(|r| r.kind == "dpc_driver")
+            .expect("应包含 dpc_driver 原因");
+        assert!(r.detail.contains("nvlddmkm.sys"), "归因应含驱动名: {}", r.detail);
+        assert!(r.detail.contains("75%"), "应含占比: {}", r.detail);
+        assert_eq!(ev.dpc_top.as_ref().unwrap().drivers[0].0, "nvlddmkm.sys");
+    }
+
+    #[test]
+    fn dpc_driver_ignores_below_threshold() {
+        let cfg = DetectorConfig::default();
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        // 正常水平(~1500/s)不触发
+        let dpc = DpcSample {
+            ts_ms: base,
+            total: 1500,
+            drivers: vec![("ntoskrnl.exe".into(), 1200)],
+        };
+        assert!(
+            det.feed(sample(base, 20.0), &[], &[], None, Some(&dpc), &cfg)
+                .is_none()
+        );
     }
 
     #[test]
@@ -445,7 +532,7 @@ mod tests {
             stutters: 2,
         };
         let ev = det
-            .feed(sample(base, 30.0), &[], &[], Some(&game), &cfg)
+            .feed(sample(base, 30.0), &[], &[], Some(&game), None, &cfg)
             .expect("帧间隔尖峰应触发");
         let r = ev
             .reasons
@@ -471,7 +558,7 @@ mod tests {
             max_gap_ms: 500.0,
             stutters: 1,
         };
-        assert!(det.feed(sample(base, 20.0), &[], &[], Some(&idle), &cfg).is_none());
+        assert!(det.feed(sample(base, 20.0), &[], &[], Some(&idle), None, &cfg).is_none());
         // fps 高但间隔正常不触发
         let mut det2 = LagDetector::new();
         let smooth = GameSample {
@@ -485,7 +572,7 @@ mod tests {
         };
         assert!(
             det2
-                .feed(sample(base, 20.0), &[], &[], Some(&smooth), &cfg)
+                .feed(sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
                 .is_none()
         );
     }

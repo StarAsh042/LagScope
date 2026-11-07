@@ -1,6 +1,6 @@
 [package]
 name = "lag-monitor"
-version = "0.1.0"
+version = "0.5.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -28,7 +28,8 @@ serde_json = "1"
 sysinfo = "0.40.1"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 winreg = "0.56.0"
-windows = { version = "0.62.2", features = ["Win32_System_Performance", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", features = ["Win32_System_Performance", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_ProcessStatus", "Win32_System_LibraryLoader"] }
+ferrisetw = "1.2.0"
 
 
 # 本机磁盘紧张:dev 只保留行号级调试信息,显著缩减构建产物

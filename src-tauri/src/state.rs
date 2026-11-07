@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use sysinfo::System;
 
+use crate::collectors::dpc_etw::DpcWatch;
 use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::DetectorConfig;
@@ -26,6 +27,8 @@ pub struct AppState {
     pub close_to_tray: Mutex<bool>,
     /// PresentMon 帧监测(Some = 运行中)
     pub frame_monitor: Mutex<Option<PresentMonWatch>>,
+    /// ETW DPC 归因(需管理员;失败为 None)
+    pub dpc_watch: Mutex<Option<DpcWatch>>,
 }
 
 impl AppState {
@@ -40,6 +43,7 @@ impl AppState {
             config: Mutex::new(config),
             close_to_tray: Mutex::new(close_to_tray),
             frame_monitor: Mutex::new(None),
+            dpc_watch: Mutex::new(None),
         }
     }
 }

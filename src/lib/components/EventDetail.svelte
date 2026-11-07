@@ -66,6 +66,18 @@
       </div>
     {/if}
 
+    {#if ev.dpcTop}
+      <div class="section">
+        <div class="stitle">DPC 驱动分布(共 {ev.dpcTop.total} 次/秒)</div>
+        {#each ev.dpcTop.drivers as [name, count], i (name)}
+          <div class="line">
+            {i + 1}. {name} — {count} 次
+            ({((count / ev.dpcTop.total) * 100).toFixed(0)}%)
+          </div>
+        {/each}
+      </div>
+    {/if}
+
     {#if ev.game}
       <div class="section">
         <div class="stitle">帧统计({ev.game.app})</div>

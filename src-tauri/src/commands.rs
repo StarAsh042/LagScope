@@ -30,6 +30,19 @@ pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enab
     }
 }
 
+/// 启动/停止 ETW DPC 归因(设置开关与启动流程共用)
+pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
+    let mut dw = state.dpc_watch.lock().unwrap();
+    if enable {
+        if dw.is_none() {
+            *dw = Some(crate::collectors::dpc_etw::DpcWatch::start());
+        }
+    } else {
+        // Drop:停止标志 → 会话线程结束 trace
+        *dw = None;
+    }
+}
+
 /// 悬浮迷你窗:启动时已预创建(隐藏),这里只做显示/隐藏切换
 #[tauri::command]
 pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
@@ -138,13 +151,20 @@ pub fn run_diagnose(
         .unwrap()
         .as_ref()
         .and_then(|w| w.snapshot());
+    let dpc_top = state
+        .dpc_watch
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|w| w.snapshot());
     // 手动诊断只如实记录当前状态;若没有任何自动阈值命中,标记为 manual
     let reasons = vec![LagReason {
         kind: "manual".into(),
         detail: "手动触发诊断快照".into(),
         value: 0.0,
     }];
-    let mut event = LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung, game);
+    let mut event =
+        LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung, game, dpc_top);
     let id = state.db.insert_event(&event)?;
     event.id = Some(id);
     let _ = tauri::Emitter::emit(app, crate::collectors::EVENT_LAG, &event);
