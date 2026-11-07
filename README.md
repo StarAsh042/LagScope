@@ -5,6 +5,23 @@
 [![CI](https://github.com/StarAsh042/LagScope/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/StarAsh042/LagScope/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## 目录
+
+- [简介](#简介)
+- [功能](#功能)
+- [卡顿检测机制](#卡顿检测机制)
+- [截图](#截图)
+- [前置条件](#前置条件)
+- [安装](#安装)
+- [快速开始](#快速开始)
+- [配置](#配置)
+- [兼容性](#兼容性)
+- [项目结构](#项目结构)
+- [文档导航](#文档导航)
+- [参与开发](#参与开发)
+- [许可证](#许可证)
+- [致谢](#致谢)
+
 ## 简介
 
 LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚才为什么卡」。它在后台以 1 Hz 采集系统指标，持续评估多种卡顿信号，命中阈值时自动生成带中文归因描述的事件，并把触发时刻的计数器快照、Top 进程与窗口状态存入本地 SQLite，供事后复盘。
@@ -105,20 +122,39 @@ npm run tauri dev
 
 设置通过应用内「设置页」修改，保存后**热生效**，无需重启。配置由 `tauri-plugin-store` 持久化到 `settings.json`，键名为 `settings`；无环境变量、无命令行参数。默认值如下：
 
-| 键 | 必需 | 默认值 | 敏感 | 说明 |
-|---|---|---|---|---|
-| `cpuPct` | 否 | 85 | 否 | CPU 满载判定阈值，单位 %；取值 0–100 |
-| `cpuSustainS` | 否 | 10 | 否 | CPU 满载持续时间，单位 s |
-| `commitPct` | 否 | 90 | 否 | 提交内存占上限比例阈值，单位 %；取值 0–100 |
-| `pageInput` | 否 | 500 | 否 | 硬缺页速率阈值，单位 页/s |
-| `diskTransferMs` | 否 | 25 | 否 | 磁盘平均延迟阈值，单位 ms |
-| `diskSustainS` | 否 | 5 | 否 | 磁盘延迟超标持续时间，单位 s |
-| `interruptPct` | 否 | 20 | 否 | 中断时间占比阈值，单位 %；取值 0–100 |
-| `cooldownS` | 否 | 60 | 否 | 同类事件冷却时间，单位 s |
-| `closeToTray` | 否 | true | 否 | 关闭窗口时隐藏到托盘并继续采集 |
-| `autostart` | 否 | false | 否 | 开机自启 |
-| `enableFrameMonitor` | 否 | true | 否 | PresentMon 帧监测开关 |
-| `enableDpcWatch` | 否 | true | 否 | ETW DPC 驱动归因开关（非管理员自动降级） |
+| 键 | 必需 | 默认值 | 示例 | 敏感 | 说明 |
+|---|---|---|---|---|---|
+| `cpuPct` | 否 | 85 | `85` | 否 | CPU 满载判定阈值，单位 %；取值 0–100 |
+| `cpuSustainS` | 否 | 10 | `10` | 否 | CPU 满载持续时间，单位 s |
+| `commitPct` | 否 | 90 | `90` | 否 | 提交内存占上限比例阈值，单位 %；取值 0–100 |
+| `pageInput` | 否 | 500 | `500` | 否 | 硬缺页速率阈值，单位 页/s |
+| `diskTransferMs` | 否 | 25 | `25` | 否 | 磁盘平均延迟阈值，单位 ms |
+| `diskSustainS` | 否 | 5 | `5` | 否 | 磁盘延迟超标持续时间，单位 s |
+| `interruptPct` | 否 | 20 | `20` | 否 | 中断时间占比阈值，单位 %；取值 0–100 |
+| `cooldownS` | 否 | 60 | `60` | 否 | 同类事件冷却时间，单位 s |
+| `closeToTray` | 否 | true | `true` | 否 | 关闭窗口时隐藏到托盘并继续采集 |
+| `autostart` | 否 | false | `false` | 否 | 开机自启 |
+| `enableFrameMonitor` | 否 | true | `true` | 否 | PresentMon 帧监测开关 |
+| `enableDpcWatch` | 否 | true | `true` | 否 | ETW DPC 驱动归因开关（非管理员自动降级） |
+
+完整最小配置示例（`settings.json` 中 `settings` 键对应的对象，字段与 `settings.rs` 的 `Settings` 结构体一致，序列化为 `camelCase`）：
+
+```json
+{
+  "cpuPct": 85,
+  "cpuSustainS": 10,
+  "commitPct": 90,
+  "pageInput": 500,
+  "diskTransferMs": 25,
+  "diskSustainS": 5,
+  "interruptPct": 20,
+  "cooldownS": 60,
+  "closeToTray": true,
+  "autostart": false,
+  "enableFrameMonitor": true,
+  "enableDpcWatch": true
+}
+```
 
 取值优先级：设置页 > 默认值（无 CLI、无环境变量、无其他配置文件覆盖）。生效方式：保存设置后**热更新**检测器阈值、帧监测 / DPC 开关与开机自启注册，无需重启。校验失败时 `set_settings` 返回错误字符串（如「保存设置失败」），设置不落盘；可在终端查看 Rust 侧报错。以上键均为本地偏好，不含 secret / token / 连接串。
 
