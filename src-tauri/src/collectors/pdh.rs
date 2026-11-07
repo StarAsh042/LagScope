@@ -139,9 +139,10 @@ mod tests {
             .or_else(|_| q.add(r"\Processor(_Total)\DPCs/sec"))
             .expect("add dpc");
         let pages = q.add(r"\Memory\Pages Input/sec").expect("add pages");
+        // 云 runner 可能没有 GPU Engine 计数器,允许缺失
         let gpu = q
             .add(r"\GPU Engine(*engtype_3D)\Utilization Percentage")
-            .expect("add gpu engine");
+            .ok();
 
         q.collect().expect("collect #1");
         sleep(Duration::from_millis(1100));
@@ -151,7 +152,7 @@ mod tests {
         assert!((0.0..=100.0).contains(&cpu_v), "cpu% 超范围: {cpu_v}");
         let dpc_v = q.read(&dpc).expect("dpc value");
         let pages_v = q.read(&pages).expect("pages value");
-        let gpu_inst = q.read_instances(&gpu);
+        let gpu_inst = gpu.map(|g| q.read_instances(&g)).unwrap_or_default();
         println!("cpu%={cpu_v:.1} dpc/s={dpc_v:.1} pages/s={pages_v:.1} gpu_instances={}", gpu_inst.len());
         // 速率型计数器的合理量级:DPC 每秒几百到几万;若拿到累计原始值会是 1e7 量级
         assert!(dpc_v < 1_000_000.0, "DPC/s 异常(疑似原始值): {dpc_v}");

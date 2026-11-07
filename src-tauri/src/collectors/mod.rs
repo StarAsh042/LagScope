@@ -267,16 +267,22 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
 
         // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
         let cfg = state.config.lock().unwrap().clone();
+        // 新鲜度守卫:监测器意外死亡后快照会冻结,3 秒内的数据才有效
+        let now = sample.ts_ms;
         let game = {
             let fm = state.frame_monitor.lock().unwrap();
-            fm.as_ref().and_then(|w| w.snapshot())
+            fm.as_ref()
+                .and_then(|w| w.snapshot())
+                .filter(|g| now.saturating_sub(g.ts_ms) < 3000)
         };
         if let Some(g) = &game {
             let _ = app.emit(EVENT_GAME, g);
         }
         let dpc = {
             let w = state.dpc_watch.lock().unwrap();
-            w.as_ref().and_then(|w| w.snapshot())
+            w.as_ref()
+                .and_then(|w| w.snapshot())
+                .filter(|d| now.saturating_sub(d.ts_ms) < 3000)
         };
         if let Some(d) = &dpc {
             let _ = app.emit(EVENT_DPC, d);

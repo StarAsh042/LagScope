@@ -1,0 +1,45 @@
+# 构建与测试工作流(推送到 GitHub 后自动生效)
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Frontend type check
+        run: npm run check
+
+      - name: Build MSI
+        run: npm run tauri build -- --bundles msi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LagScope-msi
+          path: src-tauri/target/release/bundle/msi/*.msi

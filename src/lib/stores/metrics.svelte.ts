@@ -44,6 +44,14 @@ export async function startMetrics() {
     }
   });
 
+  // 陈旧数据守卫:数据流断掉(如监测器崩溃)后清空显示,避免幽灵数值
+  setInterval(() => {
+    const now = Date.now();
+    if (metrics.game && now - metrics.game.tsMs > 5000) {
+      metrics.game = null;
+    }
+  }, 3000);
+
   // 启动时先补一次最新值(避免图表空白 1 秒)
   const seed = await invoke<MetricSample | null>("get_latest_sample");
   if (seed && metrics.history.length === 0) {
