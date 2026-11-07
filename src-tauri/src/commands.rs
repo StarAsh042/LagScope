@@ -1,5 +1,7 @@
 //! Tauri 命令层:前端 invoke 的入口。
 
+use serde::Serialize;
+
 use sysinfo::Pid;
 
 use tauri::path::BaseDirectory;
@@ -10,6 +12,32 @@ use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
 use crate::state::AppState;
+
+/// 帧监测与 DPC 归因的实时运行状态(设置页展示用)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorStatus {
+    /// 已配置且会话存活
+    pub frame_active: bool,
+    /// 已配置且内核会话成功(需管理员)
+    pub dpc_active: bool,
+    /// 用户是否开启了对应功能
+    pub frame_enabled: bool,
+    pub dpc_enabled: bool,
+}
+
+/// 查询监测器运行状态
+#[tauri::command]
+pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> MonitorStatus {
+    let frame = state.frame_monitor.lock().unwrap().as_ref().map(|w| w.is_available());
+    let dpc = state.dpc_watch.lock().unwrap().as_ref().map(|w| w.is_available());
+    MonitorStatus {
+        frame_active: frame == Some(true),
+        dpc_active: dpc == Some(true),
+        frame_enabled: frame.is_some(),
+        dpc_enabled: dpc.is_some(),
+    }
+}
 
 /// 启动/停止 PresentMon 帧监测(设置开关与启动流程共用)
 pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enable: bool) {
@@ -184,7 +212,9 @@ pub fn diagnose_now(
 mod tests {
     use std::process::{Command, Stdio};
 
-    use sysinfo::Pid;
+    use serde::Serialize;
+
+use sysinfo::Pid;
 
     /// 用一个短命子进程验证 refresh_processes(Some)+kill 的 sysinfo 通路
     #[test]

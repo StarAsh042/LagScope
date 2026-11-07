@@ -32,6 +32,11 @@ impl Db {
         // 迁移:游戏帧字段(v0.2.0)、DPC 归因字段(v0.6.0 新增,旧行为 NULL)
         let _ = conn.execute_batch("ALTER TABLE lag_events ADD COLUMN game_json TEXT;");
         let _ = conn.execute_batch("ALTER TABLE lag_events ADD COLUMN dpc_json TEXT;");
+        // 保留策略:只保留最近 500 条(事件库无限增长防护,启动时执行一次)
+        conn.execute_batch(
+            "DELETE FROM lag_events WHERE id NOT IN (SELECT id FROM lag_events ORDER BY ts_ms DESC LIMIT 500);",
+        )
+        .map_err(|e| format!("清理历史事件失败: {e}"))?;
         Ok(Self {
             conn: Mutex::new(conn),
         })

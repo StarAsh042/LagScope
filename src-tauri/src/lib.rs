@@ -153,6 +153,7 @@ pub fn run() {
             commands::toggle_mini,
             commands::hide_mini,
             commands::show_main,
+            commands::get_monitor_status,
             startup::get_startup_items,
             startup::set_startup_enabled,
             settings::get_settings,

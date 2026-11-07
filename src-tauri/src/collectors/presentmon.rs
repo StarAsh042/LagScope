@@ -66,7 +66,6 @@ impl PresentMonWatch {
         self.latest.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
-    #[allow(dead_code)]
     pub fn is_available(&self) -> bool {
         self.available.load(Ordering::Relaxed)
     }

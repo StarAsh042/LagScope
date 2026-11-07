@@ -245,7 +245,6 @@ impl DpcWatch {
             .clone()
     }
 
-    #[allow(dead_code)]
     pub fn is_available(&self) -> bool {
         self.available.load(Ordering::Relaxed)
     }

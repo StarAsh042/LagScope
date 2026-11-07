@@ -3,6 +3,15 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  interface MonitorStatus {
+    frameActive: boolean;
+    dpcActive: boolean;
+    frameEnabled: boolean;
+    dpcEnabled: boolean;
+  }
+
+  let monitor = $state<MonitorStatus | null>(null);
+
   interface Settings {
     cpuPct: number;
     cpuSustainS: number;
@@ -29,6 +38,16 @@
     } catch (e) {
       errMsg = String(e);
     }
+    // 轮询监测器实际运行状态(5s)
+    const poll = async () => {
+      try {
+        monitor = await invoke<MonitorStatus>("get_monitor_status");
+      } catch {
+        /* 忽略瞬时失败 */
+      }
+    };
+    await poll();
+    setInterval(poll, 5000);
   });
 
   async function save() {
@@ -103,10 +122,20 @@
       <label class="check">
         <input type="checkbox" bind:checked={s.enableFrameMonitor} />
         <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
+        {#if monitor?.frameEnabled}
+          <span class="state-badge" class:on={monitor.frameActive}>
+            {monitor.frameActive ? "● 运行中" : "○ 已停止"}
+          </span>
+        {/if}
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={s.enableDpcWatch} />
         <span>DPC 驱动归因(ETW 内核跟踪,需管理员权限)</span>
+        {#if monitor?.dpcEnabled}
+          <span class="state-badge" class:on={monitor.dpcActive}>
+            {monitor.dpcActive ? "● 运行中" : "○ 已停止(需管理员)"}
+          </span>
+        {/if}
       </label>
     </div>
 
@@ -204,6 +233,14 @@
   .err {
     color: var(--err, #e5484d);
     font-size: 12.5px;
+  }
+  .state-badge {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-dim, #8b94a7);
+  }
+  .state-badge.on {
+    color: var(--ok, #3dd68c);
   }
   .loading {
     color: var(--text-dim, #8b94a7);
