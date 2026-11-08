@@ -28,7 +28,7 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 
 采集与判定全部在本机完成，数据不离开设备。适用人群：需要定位间歇性卡顿原因的 Windows 用户、游戏玩家与桌面运维人员。不适用的场景：服务器集群监控、跨平台（macOS / Linux）使用、需要远程集中收集指标的环境。
 
-本项目采用 Tauri 2 + Svelte 5 + TypeScript + Rust。当前版本 `1.1.0`，仅面向 Windows，维护状态为活跃。
+本项目采用 Tauri 2 + Svelte 5 + TypeScript + Rust。当前版本 `1.1.1`，仅面向 Windows，维护状态为活跃。
 
 ## 功能
 
@@ -77,7 +77,7 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 
 ## 安装
 
-项目当前没有发布页面（Release）、没有预编译安装包下载，也没有配置自动更新通道。安装包需从源码构建，或从 [Actions 工作流](https://github.com/StarAsh042/LagScope/actions/workflows/build.yml) 的 `windows-build` 产物 `LagScope-msi` 中获取 `.msi`。
+项目未配置自动更新通道。安装包可从 [GitHub Release 页面](https://github.com/StarAsh042/LagScope/releases) 下载 `.msi`，或从源码构建，或从 [Actions 工作流](https://github.com/StarAsh042/LagScope/actions/workflows/build.yml) 的 `windows-build` 产物 `LagScope-msi` 中获取 `.msi`。
 
 从源码获取代码并安装依赖：
 
@@ -181,10 +181,10 @@ npm run tauri dev
 
 | 项目版本 | 平台 / 架构 | 运行时 | 状态 |
 |---|---|---|---|
-| 1.1.0 | Windows x86-64（CI `windows-latest`）| WebView2 + Node.js 22 | 已构建验证：CI `windows-build` 全绿，完成 `cargo test --lib`、`npm run check` 与 `.msi` 打包；此为编译与单元测试证据，非真实桌面 GUI 运行时验收 |
-| 1.1.0 | Windows 10 / 11 x86-64 | WebView2 | 未测试（仓库无真实桌面运行截图与手工验收记录） |
-| 1.1.0 | macOS / Linux | 不适用 | 未测试，且代码依赖 Windows 专用 API |
-| 1.1.0 | Windows ARM64 | 不适用 | 未测试 |
+| 1.1.1 | Windows x86-64（CI `windows-latest`）| WebView2 + Node.js 22 | 已构建验证：CI `windows-build` 全绿，完成 `cargo test --lib`、`npm run check` 与 `.msi` 打包；此为编译与单元测试证据，非真实桌面 GUI 运行时验收 |
+| 1.1.1 | Windows 10 / 11 x86-64 | WebView2 | 未测试（仓库无真实桌面运行截图与手工验收记录） |
+| 1.1.1 | macOS / Linux | 不适用 | 未测试，且代码依赖 Windows 专用 API |
+| 1.1.1 | Windows ARM64 | 不适用 | 未测试 |
 
 依据规范，CI 编译通过不等于真实平台验收，故上表不把任何平台标为「已测试」；仅如实记录 CI 上的构建与测试证据。
 

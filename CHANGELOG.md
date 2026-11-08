@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-08
+
 ### Added
 
 - 新增 MIT 许可证文件 `LICENSE`，明确原创代码的授权条款（[`0ffe2eb`](https://github.com/StarAsh042/LagScope/commit/0ffe2ebbeb0dff425c5b982d1c95ba926eb0df24)）。
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - 变更贡献流程：在 README 增加「参与开发」章节，要求向 `dev` 分支提交 Pull Request，而非直接向 `main` 提交（[#1](https://github.com/StarAsh042/LagScope/pull/1)，[`b24bbdd`](https://github.com/StarAsh042/LagScope/commit/b24bbdd4f43487e0e970c41201102d287671f175)）。
+- 变更文档：按书写规范重写 README 并新增 CHANGELOG，新增目录、配置示例列与完整最小配置示例，规范命令与版本事实源（[#7](https://github.com/StarAsh042/LagScope/pull/7)，[#8](https://github.com/StarAsh042/LagScope/pull/8)）。
 
 ## [1.1.0] - 2026-11-07
 
@@ -90,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增托盘图标、关闭窗口隐藏到托盘、单实例、开机自启与设置页（[`204482b`](https://github.com/StarAsh042/LagScope/commit/204482b09c39b5a33c8f8961e427681f023cbee1)）。
 - 新增 `sysinfo` 与 Windows PDH 指标采集层及进程相关命令（[`cac2270`](https://github.com/StarAsh042/LagScope/commit/cac2270b02976938281d5e5b50fb85f919408250)）。
 
-[Unreleased]: https://github.com/StarAsh042/LagScope/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/StarAsh042/LagScope/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/StarAsh042/LagScope/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/StarAsh042/LagScope/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/StarAsh042/LagScope/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/StarAsh042/LagScope/compare/v0.6.0...v1.0.0
