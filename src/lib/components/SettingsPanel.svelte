@@ -17,6 +17,8 @@
     cpuSustainS: number;
     commitPct: number;
     pageInput: number;
+    pageSustainS: number;
+    memSustainS: number;
     diskTransferMs: number;
     diskSustainS: number;
     interruptPct: number;
@@ -90,6 +92,14 @@
       <label>
         <span>硬缺页阈值 页/秒</span>
         <input type="number" min="100" max="5000" bind:value={s.pageInput} />
+      </label>
+      <label>
+        <span>硬缺页持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.pageSustainS} />
+      </label>
+      <label>
+        <span>内存占用持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.memSustainS} />
       </label>
       <label>
         <span>磁盘延迟阈值 ms</span>
