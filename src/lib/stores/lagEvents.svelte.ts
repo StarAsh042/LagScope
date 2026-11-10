@@ -1,14 +1,26 @@
 // 卡顿事件:加载历史 + 实时监听 + 立即诊断
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import type { LagEvent } from "$lib/types";
+
+/** 导出落盘结果 */
+export interface ExportResult {
+  path: string;
+  count: number;
+  format: string;
+}
 
 export const lagEvents = $state({
   list: [] as LagEvent[],
   selected: null as LagEvent | null,
   diagnosing: false,
   loadError: "",
+  exporting: false,
+  exportNote: "",
+  exportError: "",
+  lastExport: "",
 });
 
 let started = false;
@@ -64,6 +76,34 @@ export async function diagnoseNow() {
   }
 }
 
+/** 导出最近事件为 CSV / JSON,成功后可选直接定位到文件 */
+export async function exportEvents(format: "csv" | "json", reveal = true) {
+  lagEvents.exporting = true;
+  lagEvents.exportNote = "";
+  lagEvents.exportError = "";
+  try {
+    const r = await invoke<ExportResult>("export_lag_events", { format });
+    lagEvents.lastExport = r.path;
+    lagEvents.exportNote = "已导出 " + r.count + " 条事件到 " + r.path;
+    if (reveal) await revealItemInDir(r.path);
+  } catch (err) {
+    lagEvents.exportError = String(err);
+  } finally {
+    lagEvents.exporting = false;
+  }
+}
+
+/** 在资源管理器中定位上一次导出的文件 */
+export async function revealLastExport() {
+  lagEvents.exportError = "";
+  if (!lagEvents.lastExport) return;
+  try {
+    await revealItemInDir(lagEvents.lastExport);
+  } catch (err) {
+    lagEvents.exportError = String(err);
+  }
+}
+
 export function select(ev: LagEvent) {
   lagEvents.selected = ev;
 }
@@ -88,5 +128,8 @@ export function kindMeta(kind: string) {
 export function fmtTs(tsMs: number): string {
   const d = new Date(tsMs);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return (
+    d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
+    p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds())
+  );
 }
