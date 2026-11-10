@@ -18,6 +18,10 @@ pub struct DetectorConfig {
     pub commit_pct: f64,
     /// 硬缺页速率阈值 页/秒
     pub page_input: f64,
+    /// 硬缺页需持续秒数(独立于 CPU 阈值,避免改 CPU 设置串扰内存告警)
+    pub page_sustain_s: u64,
+    /// 提交内存需持续秒数(独立于磁盘阈值)
+    pub mem_sustain_s: u64,
     /// 磁盘平均延迟阈值 秒
     pub disk_sec_transfer: f64,
     /// 磁盘需持续秒数
@@ -41,6 +45,8 @@ impl Default for DetectorConfig {
             cpu_sustain_s: 10,
             commit_pct: 90.0,
             page_input: 500.0,
+            page_sustain_s: 5,
+            mem_sustain_s: 5,
             disk_sec_transfer: 0.025,
             disk_sustain_s: 5,
             interrupt_pct: 20.0,
@@ -262,7 +268,7 @@ impl LagDetector {
             });
         }
 
-        if let Some(v) = self.sustained(cfg.disk_sustain_s, |s| {
+        if let Some(v) = self.sustained(cfg.mem_sustain_s, |s| {
             let pct = if s.mem_commit_limit > 0 {
                 (s.mem_commit_used as f64 / s.mem_commit_limit as f64) * 100.0
             } else {
@@ -272,17 +278,20 @@ impl LagDetector {
         }) {
             reasons.push(LagReason {
                 kind: "mem_pressure".into(),
-                detail: format!("提交内存占用 {v:.0}%(虚拟内存接近上限)"),
+                detail: format!(
+                    "提交内存占用 {v:.0}% 持续 {} 秒(虚拟内存接近上限)",
+                    cfg.mem_sustain_s
+                ),
                 value: v,
             });
         }
 
-        if let Some(v) = self.sustained(cfg.cpu_sustain_s, |s| {
+        if let Some(v) = self.sustained(cfg.page_sustain_s, |s| {
             (s.page_input_per_sec >= cfg.page_input).then_some(s.page_input_per_sec)
         }) {
             reasons.push(LagReason {
                 kind: "page_faults".into(),
-                detail: format!("硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)", cfg.cpu_sustain_s),
+                detail: format!("硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)", cfg.page_sustain_s),
                 value: v,
             });
         }
@@ -575,5 +584,104 @@ mod tests {
                 .feed(sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
                 .is_none()
         );
+    }
+
+    fn page_sample(ts_ms: u64, page_input: f64) -> MetricSample {
+        MetricSample {
+            page_input_per_sec: page_input,
+            ..sample(ts_ms, 10.0)
+        }
+    }
+
+    /// 回归:硬缺页的持续时间必须走 page_sustain_s,不能复用 cpu_sustain_s。
+    #[test]
+    fn page_faults_use_own_sustain_window() {
+        let cfg = DetectorConfig {
+            page_sustain_s: 3,
+            cpu_sustain_s: 60, // CPU 阈值拉到很大,不应影响缺页判定
+            page_input: 500.0,
+            ..DetectorConfig::default()
+        };
+
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        let mut fired = None;
+        for i in 0..8u64 {
+            if let Some(ev) = det.feed(page_sample(base + i * 1000, 900.0), &[], &[], None, None, &cfg) {
+                fired = Some(ev);
+                break;
+            }
+        }
+        let ev = fired.expect("缺页持续 3 秒即应触发,不应被 cpu_sustain_s=60 拖住");
+        let r = ev
+            .reasons
+            .iter()
+            .find(|r| r.kind == "page_faults")
+            .expect("应包含 page_faults 原因");
+        assert!(
+            r.detail.contains("持续 3 秒"),
+            "文案应渲染 page_sustain_s,实际: {}",
+            r.detail
+        );
+    }
+
+    /// 回归:内存压力不能借用磁盘阈值。
+    #[test]
+    fn mem_pressure_uses_own_sustain_window() {
+        let cfg = DetectorConfig {
+            mem_sustain_s: 3,
+            disk_sustain_s: 60, // 磁盘阈值拉大,不应影响内存判定
+            commit_pct: 90.0,
+            ..DetectorConfig::default()
+        };
+
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        let mut fired = None;
+        for i in 0..8u64 {
+            let mut s = sample(base + i * 1000, 10.0);
+            s.mem_commit_used = 21 * 1024 * 1024 * 1024; // 21/22 GiB ≈ 95%
+            s.mem_commit_limit = 22 * 1024 * 1024 * 1024;
+            if let Some(ev) = det.feed(s, &[], &[], None, None, &cfg) {
+                fired = Some(ev);
+                break;
+            }
+        }
+        let ev = fired.expect("内存超阈持续 3 秒即应触发,不应被 disk_sustain_s=60 拖住");
+        let r = ev
+            .reasons
+            .iter()
+            .find(|r| r.kind == "mem_pressure")
+            .expect("应包含 mem_pressure 原因");
+        assert!(
+            r.detail.contains("持续 3 秒"),
+            "文案应渲染 mem_sustain_s,实际: {}",
+            r.detail
+        );
+    }
+
+    /// 两个阈值互相独立:改 CPU 持续秒数不影响缺页,改缺页不影响 CPU。
+    #[test]
+    fn sustain_thresholds_are_independent() {
+        let cfg = DetectorConfig {
+            page_sustain_s: 2,
+            cpu_sustain_s: 30,
+            page_input: 500.0,
+            cpu_pct: 85.0,
+            ..DetectorConfig::default()
+        };
+
+        // CPU 高但缺页正常 → 早期不应触发 cpu(30 秒窗口未满)
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        let mut cpu_fired_early = false;
+        for i in 0..6u64 {
+            let mut s = sample(base + i * 1000, 99.0);
+            s.page_input_per_sec = 10.0;
+            if det.feed(s, &[], &[], None, None, &cfg).is_some() {
+                cpu_fired_early = true;
+            }
+        }
+        assert!(!cpu_fired_early, "CPU 30 秒窗口未满,不应因 CPU 触发事件");
     }
 }
