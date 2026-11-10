@@ -125,6 +125,34 @@ pub struct LagEvent {
     pub dpc_top: Option<DpcSample>,
 }
 
+/// 各维度保留的 Top 进程数
+const TOP_N: usize = 5;
+
+/// 把 (pid, name, value) 按 value 降序插入不超过 `TOP_N` 的列表。
+///
+/// 只有真正挤进前 N 的条目才会复制进程名 —— 这是 `LagEvent::build` 省掉
+/// 三次全量 `sort_by` + 三次全量 `name.clone()` 的关键。
+fn push_top(list: &mut Vec<TopProc>, pid: u32, name: &str, value: f64) {
+    if list.len() == TOP_N && list.last().is_some_and(|last| value.total_cmp(&last.value).is_lt()) {
+        return;
+    }
+    let pos = list
+        .iter()
+        .position(|x| x.value.total_cmp(&value).is_lt())
+        .unwrap_or(list.len());
+    list.insert(
+        pos,
+        TopProc {
+            pid,
+            name: name.to_string(),
+            value,
+        },
+    );
+    if list.len() > TOP_N {
+        list.pop();
+    }
+}
+
 impl LagEvent {
     /// 用当前状态构造事件(检测引擎与"立即诊断"共用)
     pub fn build(
@@ -136,38 +164,21 @@ impl LagEvent {
         game: Option<GameSample>,
         dpc_top: Option<DpcSample>,
     ) -> Self {
-        let mut top_cpu: Vec<TopProc> = processes
-            .iter()
-            .map(|p| TopProc {
-                pid: p.pid,
-                name: p.name.clone(),
-                value: p.cpu_pct as f64,
-            })
-            .collect();
-        top_cpu.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
-        top_cpu.truncate(5);
-
-        let mut top_mem: Vec<TopProc> = processes
-            .iter()
-            .map(|p| TopProc {
-                pid: p.pid,
-                name: p.name.clone(),
-                value: p.mem_mb,
-            })
-            .collect();
-        top_mem.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
-        top_mem.truncate(5);
-
-        let mut top_disk: Vec<TopProc> = processes
-            .iter()
-            .map(|p| TopProc {
-                pid: p.pid,
-                name: p.name.clone(),
-                value: p.disk_read_bps + p.disk_write_bps,
-            })
-            .collect();
-        top_disk.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
-        top_disk.truncate(5);
+        // 一次遍历同时维护 CPU / 内存 / 磁盘三个 Top5,避免对同一批进程
+        // 做三趟全量构造与排序(300 进程时省下约 900 次 String 分配)
+        let mut top_cpu: Vec<TopProc> = Vec::with_capacity(TOP_N);
+        let mut top_mem: Vec<TopProc> = Vec::with_capacity(TOP_N);
+        let mut top_disk: Vec<TopProc> = Vec::with_capacity(TOP_N);
+        for p in processes {
+            push_top(&mut top_cpu, p.pid, &p.name, p.cpu_pct as f64);
+            push_top(&mut top_mem, p.pid, &p.name, p.mem_mb);
+            push_top(
+                &mut top_disk,
+                p.pid,
+                &p.name,
+                p.disk_read_bps + p.disk_write_bps,
+            );
+        }
 
         LagEvent {
             id: None,
@@ -683,5 +694,90 @@ mod tests {
             }
         }
         assert!(!cpu_fired_early, "CPU 30 秒窗口未满,不应因 CPU 触发事件");
+    }
+
+    fn proc(pid: u32, cpu: f32, mem: f64, disk: f64) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            name: format!("p{pid}"),
+            cpu_pct: cpu,
+            mem_mb: mem,
+            disk_read_bps: disk,
+            disk_write_bps: 0.0,
+            exe_path: None,
+        }
+    }
+
+    fn build_with(procs: &[ProcessInfo]) -> LagEvent {
+        LagEvent::build(
+            1,
+            vec![],
+            sample(1, 0.0),
+            procs,
+            vec![],
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn top_lists_are_sorted_and_capped() {
+        // 8 个进程,CPU / 内存 / 磁盘按不同的顺序排列,确保三条 Top5 各取各的
+        let mut procs: Vec<ProcessInfo> = (0..8u32)
+            .map(|i| {
+                let f = i as f32;
+                proc(100 + i, f, (7 - i) as f64, (i % 3) as f64 * 100.0)
+            })
+            .collect();
+        procs[5].disk_read_bps = 999.0;
+
+        let ev = build_with(&procs);
+
+        for (label, list) in [
+            ("cpu", &ev.top_cpu),
+            ("mem", &ev.top_mem),
+            ("disk", &ev.top_disk),
+        ] {
+            assert_eq!(list.len(), TOP_N, "{label} 应截断到 Top{TOP_N}");
+            assert!(
+                list.windows(2).all(|w| w[0].value >= w[1].value),
+                "{label} 应按降序排列: {list:?}"
+            );
+        }
+        assert_eq!(ev.top_cpu[0].pid, 107);
+        assert_eq!(ev.top_mem[0].pid, 100);
+        assert_eq!(ev.top_disk[0].pid, 105);
+        // 磁盘维度其余全是 0,Top1 之外不能出现 999 以外的更高值
+        assert!(ev.top_disk[1..].iter().all(|p| p.value < 999.0));
+    }
+
+    #[test]
+    fn top_lists_keep_everything_below_the_limit() {
+        let procs = vec![proc(1, 10.0, 1.0, 0.0), proc(2, 30.0, 2.0, 0.0)];
+        let ev = build_with(&procs);
+        assert_eq!(ev.top_cpu.len(), 2, "不足 {TOP_N} 个时不应补齐或截断");
+        assert_eq!(ev.top_cpu[0].pid, 2);
+        assert_eq!(ev.top_cpu[1].pid, 1);
+    }
+
+    #[test]
+    fn top_lists_handle_ties_without_dropping_entries() {
+        // 同值时按插入顺序稳定保留,且不会因为浮点 NaN 丢条目
+        let procs: Vec<ProcessInfo> = (0..7u32).map(|i| proc(i, 50.0, 50.0, 0.0)).collect();
+        let ev = build_with(&procs);
+        assert_eq!(ev.top_cpu.len(), TOP_N);
+        let pids: Vec<u32> = ev.top_cpu.iter().map(|p| p.pid).collect();
+        assert_eq!(pids, vec![0, 1, 2, 3, 4], "同值时应按插入顺序取前 {TOP_N} 个");
+    }
+
+    #[test]
+    fn push_top_survives_nan_values() {
+        // NaN 参与比较时 total_cmp 仍有全序,不允许 panic 或长度失控
+        let mut list: Vec<TopProc> = Vec::with_capacity(TOP_N);
+        for i in 0..10u32 {
+            let v = if i % 2 == 0 { f64::NAN } else { i as f64 };
+            push_top(&mut list, i, "x", v);
+        }
+        assert_eq!(list.len(), TOP_N);
     }
 }
