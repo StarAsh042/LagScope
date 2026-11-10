@@ -11,7 +11,8 @@ use winreg::{HKEY, RegKey, RegValue};
 
 const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_SUBKEY_WOW: &str = r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run";
-const APPROVED_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+const APPROVED_SUBKEY: &str =
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 const APPROVED_SUBKEY_WOW: &str =
     r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
@@ -104,11 +105,7 @@ fn extract_target(command: &str) -> Option<String> {
         cmd.split_whitespace().next().unwrap_or(cmd)
     };
     let p = expand_env(first).trim().to_string();
-    if p.is_empty() {
-        None
-    } else {
-        Some(p)
-    }
+    if p.is_empty() { None } else { Some(p) }
 }
 
 fn expand_env(s: &str) -> String {
@@ -185,8 +182,7 @@ fn startup_folder_paths() -> Vec<(std::path::PathBuf, StartupSource, &'static st
     }
     if let Some(pdata) = std::env::var_os("PROGRAMDATA") {
         v.push((
-            std::path::PathBuf::from(pdata)
-                .join(r"Microsoft\Windows\Start Menu\Programs\Startup"),
+            std::path::PathBuf::from(pdata).join(r"Microsoft\Windows\Start Menu\Programs\Startup"),
             StartupSource::CommonFolder,
             "所有用户启动文件夹",
         ));
@@ -241,7 +237,10 @@ pub fn set_startup_enabled_impl(
     name: &str,
     enabled: bool,
 ) -> Result<(), String> {
-    if matches!(source, StartupSource::UserFolder | StartupSource::CommonFolder) {
+    if matches!(
+        source,
+        StartupSource::UserFolder | StartupSource::CommonFolder
+    ) {
         return Err("启动文件夹项请在文件管理器中删除对应快捷方式".into());
     }
     let (root, _run_subkey, approved_subkey, label) = source_meta(source);
@@ -312,7 +311,11 @@ mod tests {
             .expect("set test value");
 
         // 模拟 scan:状态读取
-        assert!(!is_disabled(HKEY_CURRENT_USER, APPROVED, "LagScopeTestItem"));
+        assert!(!is_disabled(
+            HKEY_CURRENT_USER,
+            APPROVED,
+            "LagScopeTestItem"
+        ));
 
         // 禁用(直接写 approved)
         let (approved_key, _) = hk.create_subkey(APPROVED).expect("create approved");
@@ -332,7 +335,11 @@ mod tests {
         approved_key
             .delete_value("LagScopeTestItem")
             .expect("delete approved");
-        assert!(!is_disabled(HKEY_CURRENT_USER, APPROVED, "LagScopeTestItem"));
+        assert!(!is_disabled(
+            HKEY_CURRENT_USER,
+            APPROVED,
+            "LagScopeTestItem"
+        ));
 
         // 清理测试键
         hk.delete_subkey_all(r"Software\LagScopeTest").ok();

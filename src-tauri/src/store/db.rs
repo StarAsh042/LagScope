@@ -1,8 +1,8 @@
 //! SQLite 事件库:卡顿事件持久化(表 lag_events)。
 
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use rusqlite::Connection;
 
@@ -247,7 +247,14 @@ mod tests {
         let a = serde_json::to_value(&ev).unwrap();
         let b = serde_json::to_value(row).unwrap();
         for k in [
-            "tsMs", "reasons", "counters", "topCpu", "topMem", "topDisk", "hungWindows", "game",
+            "tsMs",
+            "reasons",
+            "counters",
+            "topCpu",
+            "topMem",
+            "topDisk",
+            "hungWindows",
+            "game",
             "dpcTop",
         ] {
             assert_eq!(a.get(k), b.get(k), "字段 {k} 往返不一致（AC-5 逐字段相等）");
@@ -338,7 +345,11 @@ mod tests {
 
         // 再跨过一个完整周期,清理必然落到超出上限的那一刻
         let total = T_EVERY * 3;
-        insert_n(&db, total - (T_EVERY + T_RETAIN), 1_700_000_000_000 + (T_EVERY + T_RETAIN) as u64);
+        insert_n(
+            &db,
+            total - (T_EVERY + T_RETAIN),
+            1_700_000_000_000 + (T_EVERY + T_RETAIN) as u64,
+        );
         assert_eq!(
             db.count_events().unwrap(),
             T_RETAIN,

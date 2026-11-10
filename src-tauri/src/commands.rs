@@ -31,8 +31,18 @@ pub struct MonitorStatus {
 /// 查询监测器运行状态
 #[tauri::command]
 pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> MonitorStatus {
-    let frame = state.frame_monitor.lock().unwrap().as_ref().map(|w| w.is_available());
-    let dpc = state.dpc_watch.lock().unwrap().as_ref().map(|w| w.is_available());
+    let frame = state
+        .frame_monitor
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|w| w.is_available());
+    let dpc = state
+        .dpc_watch
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|w| w.is_available());
     MonitorStatus {
         frame_active: frame == Some(true),
         dpc_active: dpc == Some(true),
@@ -55,7 +65,10 @@ pub fn set_frame_monitor(
         match fm.as_ref() {
             // 已在运行:只热更新阈值,不重启子进程
             Some(watch) => watch.set_stutter_gap_ms(stutter_gap_ms),
-            None => match app.path().resolve("extras/PresentMon.exe", BaseDirectory::Resource) {
+            None => match app
+                .path()
+                .resolve("extras/PresentMon.exe", BaseDirectory::Resource)
+            {
                 Ok(p) if p.exists() => {
                     *fm = Some(PresentMonWatch::start(&p, stutter_gap_ms));
                 }
@@ -142,9 +155,7 @@ pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Arc<Vec<Proc
 
 /// 最新系统采样
 #[tauri::command]
-pub fn get_latest_sample(
-    state: State<'_, std::sync::Arc<AppState>>,
-) -> Option<Arc<MetricSample>> {
+pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<Arc<MetricSample>> {
     state.last_sample.lock().unwrap().clone()
 }
 
@@ -159,7 +170,10 @@ pub fn get_disks(state: State<'_, std::sync::Arc<AppState>>) -> Vec<DiskInfo> {
 pub fn kill_process(state: State<'_, std::sync::Arc<AppState>>, pid: u32) -> Result<bool, String> {
     let mut sys = state.sys.lock().unwrap();
     // 先补一次进程列表,保证目标进程可见
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+    sys.refresh_processes(
+        sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+        true,
+    );
     match sys.process(Pid::from_u32(pid)) {
         Some(proc) => Ok(proc.kill()),
         None => Err(format!("进程 {pid} 不存在或已退出")),
@@ -207,8 +221,15 @@ pub fn run_diagnose(
         detail: "手动触发诊断快照".into(),
         value: 0.0,
     }];
-    let mut event =
-        LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung, game, dpc_top);
+    let mut event = LagEvent::build(
+        counters.ts_ms,
+        reasons,
+        counters,
+        &processes,
+        hung,
+        game,
+        dpc_top,
+    );
     let id = state.db.insert_event(&event)?;
     event.id = Some(id);
     let _ = tauri::Emitter::emit(app, crate::collectors::EVENT_LAG, &event);
@@ -230,7 +251,7 @@ mod tests {
 
     use serde::Serialize;
 
-use sysinfo::Pid;
+    use sysinfo::Pid;
 
     /// 用一个短命子进程验证 refresh_processes(Some)+kill 的 sysinfo 通路
     #[test]
@@ -244,7 +265,10 @@ use sysinfo::Pid;
         let pid = child.id();
 
         let mut sys = sysinfo::System::new().expect("System::new");
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+        sys.refresh_processes(
+            sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+            true,
+        );
         let killed = sys
             .process(Pid::from_u32(pid))
             .map(|p| p.kill())
