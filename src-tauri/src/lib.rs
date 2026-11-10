@@ -4,15 +4,15 @@ mod collectors;
 mod commands;
 mod engine;
 mod settings;
-mod state;
 mod startup;
+mod state;
 mod store;
 
 use std::sync::Arc;
 
+use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::Manager;
 
 use state::AppState;
 use store::Db;
@@ -47,13 +47,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // 事件库:appdata/lagscope.db
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .expect("获取 appdata 目录失败");
+            let data_dir = app.path().app_data_dir().expect("获取 appdata 目录失败");
             std::fs::create_dir_all(&data_dir).ok();
-            let db = Db::open(&data_dir.join("lagscope.db"))
-                .expect("打开事件数据库失败");
+            let db = Db::open(&data_dir.join("lagscope.db")).expect("打开事件数据库失败");
 
             // 设置 → 检测阈值 / 关窗行为
             let settings = settings::load_settings(app.handle());
@@ -68,19 +64,15 @@ pub fn run() {
             // 预创建悬浮迷你窗(隐藏):避免在 command 中创建窗口导致的渲染问题
             {
                 use tauri::WebviewUrl;
-                tauri::WebviewWindowBuilder::new(
-                    app,
-                    "mini",
-                    WebviewUrl::App("mini".into()),
-                )
-                .title("LagScope 悬浮窗")
-                .inner_size(300.0, 96.0)
-                .decorations(false)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .resizable(false)
-                .visible(false)
-                .build()?;
+                tauri::WebviewWindowBuilder::new(app, "mini", WebviewUrl::App("mini".into()))
+                    .title("LagScope 悬浮窗")
+                    .inner_size(300.0, 96.0)
+                    .decorations(false)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .resizable(false)
+                    .visible(false)
+                    .build()?;
             }
 
             // 帧监测(PresentMon):按设置启动

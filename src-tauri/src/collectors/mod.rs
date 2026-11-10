@@ -222,10 +222,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
             let pid32 = pid.as_u32();
             let (read_rate, write_rate) = match prev_io.get(&pid32) {
                 Some((pr, pw)) if du.total_read_bytes >= *pr && du.total_written_bytes >= *pw => {
-                    (
-                        du.total_read_bytes - pr,
-                        du.total_written_bytes - pw,
-                    )
+                    (du.total_read_bytes - pr, du.total_written_bytes - pw)
                 }
                 _ => (0, 0),
             };
@@ -305,7 +302,10 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
                 Ok(id) => {
                     ev.id = Some(id);
                     #[cfg(debug_assertions)]
-                    eprintln!("[lag] 触发: {:?}", ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>());
+                    eprintln!(
+                        "[lag] 触发: {:?}",
+                        ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>()
+                    );
                     let _ = app.emit(EVENT_LAG, &ev);
                 }
                 Err(_e) => {
@@ -374,11 +374,17 @@ fn build_sample(
 
     sample.disk_read_bps = cs.disk_read.and_then(|c| cs.q.read(&c)).unwrap_or(0.0) as u64;
     sample.disk_write_bps = cs.disk_write.and_then(|c| cs.q.read(&c)).unwrap_or(0.0) as u64;
-    sample.disk_avg_sec_transfer = cs.disk_sec_transfer.and_then(|c| cs.q.read(&c)).unwrap_or(0.0);
+    sample.disk_avg_sec_transfer = cs
+        .disk_sec_transfer
+        .and_then(|c| cs.q.read(&c))
+        .unwrap_or(0.0);
     sample.disk_queue_length = cs.disk_queue.and_then(|c| cs.q.read(&c)).unwrap_or(0.0);
     // % Idle Time 反转为活跃占比
-    sample.disk_active_pct = (100.0 - cs.disk_idle_pct.and_then(|c| cs.q.read(&c)).unwrap_or(100.0))
-        .clamp(0.0, 100.0);
+    sample.disk_active_pct = (100.0
+        - cs.disk_idle_pct
+            .and_then(|c| cs.q.read(&c))
+            .unwrap_or(100.0))
+    .clamp(0.0, 100.0);
 
     sample.dpc_per_sec = cs.dpc_per_sec.and_then(|c| cs.q.read(&c)).unwrap_or(0.0);
     sample.interrupt_pct = cs.interrupt_pct.and_then(|c| cs.q.read(&c)).unwrap_or(0.0);
@@ -395,12 +401,11 @@ fn build_sample(
 
     // 热区温度:PDH cooked 值为开尔文(实测 329K≈55.9℃,与 WMI MSAcpi 一致),取最热区
     if let Some(c) = &cs.thermal {
-        let max_k = cs
-            .q
-            .read_instances(c)
-            .iter()
-            .map(|(_, v)| *v)
-            .fold(0.0_f64, f64::max);
+        let max_k =
+            cs.q.read_instances(c)
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(0.0_f64, f64::max);
         if max_k > 100.0 {
             sample.temperature_c = Some((max_k - 273.15) as f32);
         }

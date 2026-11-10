@@ -2,15 +2,15 @@
 //! `SendMessageTimeout(WM_NULL, SMTO_ABORTIFHUNG)` 超时即视为无响应。
 //! 与任务管理器"未响应"的判定一致(IsHungAppWindow 语义)。
 
-use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SendMessageTimeoutW,
-    SMTO_ABORTIFHUNG, WM_NULL,
+    EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SMTO_ABORTIFHUNG,
+    SendMessageTimeoutW, WM_NULL,
 };
+use windows::core::BOOL;
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::Duration;
 
@@ -19,39 +19,41 @@ struct Ctx {
     self_pid: u32,
 }
 
-unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL { unsafe {
-    let ctx = &mut *(lparam.0 as *mut Ctx);
-    // 不可见窗口跳过
-    if !IsWindowVisible(hwnd).as_bool() {
-        return BOOL(1);
+unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    unsafe {
+        let ctx = &mut *(lparam.0 as *mut Ctx);
+        // 不可见窗口跳过
+        if !IsWindowVisible(hwnd).as_bool() {
+            return BOOL(1);
+        }
+        let mut buf = [0u16; 128];
+        let len = GetWindowTextW(hwnd, &mut buf);
+        if len == 0 {
+            return BOOL(1);
+        }
+        let title = String::from_utf16_lossy(&buf[..len as usize]);
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 || pid == ctx.self_pid {
+            return BOOL(1);
+        }
+        // 2 秒内不处理消息 → 挂起
+        let mut result_ptr = 0usize;
+        let res = SendMessageTimeoutW(
+            hwnd,
+            WM_NULL,
+            WPARAM(0),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG,
+            2000,
+            Some(&mut result_ptr),
+        );
+        if res.0 == 0 {
+            ctx.out.push((pid, title));
+        }
+        BOOL(1)
     }
-    let mut buf = [0u16; 128];
-    let len = GetWindowTextW(hwnd, &mut buf);
-    if len == 0 {
-        return BOOL(1);
-    }
-    let title = String::from_utf16_lossy(&buf[..len as usize]);
-    let mut pid = 0u32;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    if pid == 0 || pid == ctx.self_pid {
-        return BOOL(1);
-    }
-    // 2 秒内不处理消息 → 挂起
-    let mut result_ptr = 0usize;
-    let res = SendMessageTimeoutW(
-        hwnd,
-        WM_NULL,
-        WPARAM(0),
-        LPARAM(0),
-        SMTO_ABORTIFHUNG,
-        2000,
-        Some(&mut result_ptr),
-    );
-    if res.0 == 0 {
-        ctx.out.push((pid, title));
-    }
-    BOOL(1)
-}}
+}
 
 /// 返回当前挂起窗口列表,如 "无响应 - Chrome (pid 1234)"
 pub fn detect_hung_windows() -> Vec<String> {
@@ -111,8 +113,7 @@ impl HungWatch {
 
 impl Drop for HungWatch {
     fn drop(&mut self) {
-        self.stop
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }

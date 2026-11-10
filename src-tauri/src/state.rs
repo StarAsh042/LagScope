@@ -72,8 +72,7 @@ mod tests {
     /// 看到稳定内容 —— 若这里退化成原地改写,读到一半的进程表会出现撕裂。
     #[test]
     fn readers_keep_a_stable_snapshot_across_updates() {
-        let cache: Mutex<Arc<Vec<ProcessInfo>>> =
-            Mutex::new(Arc::new(vec![proc(1, "one.exe")]));
+        let cache: Mutex<Arc<Vec<ProcessInfo>>> = Mutex::new(Arc::new(vec![proc(1, "one.exe")]));
 
         // 读取方拿到快照后立刻放锁
         let reader = cache.lock().unwrap().clone();

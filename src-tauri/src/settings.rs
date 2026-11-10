@@ -67,7 +67,11 @@ impl Default for Settings {
 /// 正阈值兜底:设置文件是明文 JSON,被手改成 0 会让判定恒真(帧间隔 >= 0
 /// 全部算卡帧、DPC >= 0 每秒都算风暴)。0/负数/NaN 一律回落默认值。
 fn positive_or(v: f64, fallback: f64) -> f64 {
-    if v.is_finite() && v > 0.0 { v } else { fallback }
+    if v.is_finite() && v > 0.0 {
+        v
+    } else {
+        fallback
+    }
 }
 
 impl Settings {
@@ -145,9 +149,13 @@ pub fn set_settings(
     use tauri_plugin_autostart::ManagerExt;
     let autolaunch = app.autolaunch();
     if settings.autostart {
-        autolaunch.enable().map_err(|e| format!("设置自启失败: {e}"))?;
+        autolaunch
+            .enable()
+            .map_err(|e| format!("设置自启失败: {e}"))?;
     } else {
-        autolaunch.disable().map_err(|e| format!("关闭自启失败: {e}"))?;
+        autolaunch
+            .disable()
+            .map_err(|e| format!("关闭自启失败: {e}"))?;
     }
     Ok(())
 }

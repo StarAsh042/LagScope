@@ -11,12 +11,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::engine::DpcSample;
 use ferrisetw::parser::Parser;
-use ferrisetw::provider::kernel_providers::DPC_PROVIDER;
 use ferrisetw::provider::Provider;
+use ferrisetw::provider::kernel_providers::DPC_PROVIDER;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::KernelTrace;
-use crate::engine::DpcSample;
 
 /// 内核模块表:按基址排序,用于例程地址 → 驱动名
 struct ModuleTable {
@@ -33,9 +33,9 @@ impl ModuleTable {
             // +34..36 NameOffset,+40 起为完整路径文本
             type NtQuerySystemInformationFn =
                 unsafe extern "system" fn(u32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
-            let ntdll = windows::Win32::System::LibraryLoader::GetModuleHandleW(
-                windows::core::w!("ntdll.dll"),
-            )
+            let ntdll = windows::Win32::System::LibraryLoader::GetModuleHandleW(windows::core::w!(
+                "ntdll.dll"
+            ))
             .expect("加载 ntdll");
             let proc_addr = windows::Win32::System::LibraryLoader::GetProcAddress(
                 ntdll,
@@ -68,8 +68,7 @@ impl ModuleTable {
             let count = count.min(usable);
             for i in 0..count {
                 let off = ENTRY_HDR + i * STRIDE;
-                let image_base =
-                    u64::from_le_bytes(buf[off + 16..off + 24].try_into().unwrap());
+                let image_base = u64::from_le_bytes(buf[off + 16..off + 24].try_into().unwrap());
                 // ImageSize 是 u32,与 ImageBase 相邻(+24..28)
                 let image_size =
                     u32::from_le_bytes(buf[off + 24..off + 28].try_into().unwrap()) as u64;
@@ -81,11 +80,7 @@ impl ModuleTable {
                     .unwrap_or(path_buf.len());
                 let path = String::from_utf8_lossy(&path_buf[..path_end]);
                 // 文件名取最后一个反斜杠之后
-                let name = path
-                    .rsplit('\\')
-                    .next()
-                    .unwrap_or(&path)
-                    .to_string();
+                let name = path.rsplit('\\').next().unwrap_or(&path).to_string();
                 if name.is_empty() || image_base == 0 {
                     continue;
                 }
@@ -164,12 +159,14 @@ impl DpcWatch {
             let mt = module_table.clone();
             thread::Builder::new()
                 .name("dpc-module-table".into())
-                .spawn(move || loop {
-                    thread::sleep(Duration::from_secs(30));
-                    if stop_mt.load(Ordering::Relaxed) {
-                        return;
+                .spawn(move || {
+                    loop {
+                        thread::sleep(Duration::from_secs(30));
+                        if stop_mt.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        *mt.lock().unwrap_or_else(|e| e.into_inner()) = ModuleTable::refresh();
                     }
-                    *mt.lock().unwrap_or_else(|e| e.into_inner()) = ModuleTable::refresh();
                 })
                 .ok();
         }
@@ -202,8 +199,7 @@ impl DpcWatch {
         let handle = thread::Builder::new()
             .name("dpc-etw".into())
             .spawn(move || {
-                let callback = move |record: &ferrisetw::EventRecord,
-                                     locator: &SchemaLocator| {
+                let callback = move |record: &ferrisetw::EventRecord, locator: &SchemaLocator| {
                     if record.opcode() != 68 {
                         return; // DPC 子类型(PerfInfo opcode 68)
                     }
@@ -262,9 +258,10 @@ impl Drop for DpcWatch {
         // 停止标志 → 会话线程 trace.stop() 并退出
         self.stop.store(true, Ordering::Relaxed);
         if let Ok(mut h) = self.handle.lock()
-            && let Some(h) = h.take() {
-                let _ = h.join();
-            }
+            && let Some(h) = h.take()
+        {
+            let _ = h.join();
+        }
     }
 }
 
@@ -278,8 +275,7 @@ fn flush(
     if *total == 0 {
         return;
     }
-    let mut drivers: Vec<(String, u32)> =
-        counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut drivers: Vec<(String, u32)> = counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
     drivers.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
     drivers.truncate(5);
     let sample = DpcSample {
@@ -358,7 +354,11 @@ mod tests {
     fn lookup_rejects_address_outside_module() {
         let table = sample_table();
         assert_eq!(table.lookup(0x2000), None, "落在空洞里不该归给前一个模块");
-        assert_eq!(table.lookup(0x7000), None, "超出 nvlddmkm 的 [0x5000,0x7000)");
+        assert_eq!(
+            table.lookup(0x7000),
+            None,
+            "超出 nvlddmkm 的 [0x5000,0x7000)"
+        );
         assert_eq!(table.lookup(0x9800), None, "超出 dxgkrnl 的上界");
         assert_eq!(table.lookup(0xFFFF_FFFF), None, "末个模块之后的地址");
     }

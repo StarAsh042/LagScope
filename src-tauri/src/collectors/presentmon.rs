@@ -78,7 +78,9 @@ impl PresentMonWatch {
                 if spawned.is_err() {
                     // 解析线程起不来 = 输出无人读取,等同于不可用
                     watch.available.store(false, Ordering::Relaxed);
-                    if let Some(mut c) = watch.child.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                    if let Some(mut c) =
+                        watch.child.lock().unwrap_or_else(|e| e.into_inner()).take()
+                    {
                         let _ = c.kill();
                         let _ = c.wait();
                     }
@@ -99,7 +101,10 @@ impl PresentMonWatch {
 
     /// 最近一秒的帧统计(无渲染活动或未启动时为 None)
     pub fn snapshot(&self) -> Option<GameSample> {
-        self.latest.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.latest
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// PresentMon 是否在跑:启动成功且子进程仍存活。
@@ -130,7 +135,12 @@ impl PresentMonWatch {
 
 impl Drop for PresentMonWatch {
     fn drop(&mut self) {
-        if let Some(child) = self.child.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        if let Some(child) = self
+            .child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+        {
             let _ = child.kill();
             let _ = child.wait();
         }
@@ -161,10 +171,7 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
         if line.starts_with("Application,") {
             // 表头:解析列索引(大小写不敏感,兼容 1.x/2.x 命名差异)
             let cols: Vec<&str> = line.split(',').collect();
-            let find = |name: &str| {
-                cols.iter()
-                    .position(|c| c.eq_ignore_ascii_case(name))
-            };
+            let find = |name: &str| cols.iter().position(|c| c.eq_ignore_ascii_case(name));
             col_app = find("Application");
             col_pid = find("ProcessID");
             col_dropped = find("Dropped");
@@ -174,8 +181,7 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
         if line.starts_with("PresentMon,") || line.starts_with("Summary,") {
             continue; // 底部统计行
         }
-        let (Some(ca), Some(cp), Some(cd), Some(cg)) =
-            (col_app, col_pid, col_dropped, col_gap)
+        let (Some(ca), Some(cp), Some(cd), Some(cg)) = (col_app, col_pid, col_dropped, col_gap)
         else {
             continue;
         };
@@ -185,8 +191,14 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
             continue;
         }
         let app = fields.get(ca).unwrap_or(&"-").trim().to_string();
-        let pid: u32 = fields.get(cp).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
-        let dropped: bool = fields.get(cd).and_then(|v| v.trim().parse().ok()).unwrap_or(false);
+        let pid: u32 = fields
+            .get(cp)
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0);
+        let dropped: bool = fields
+            .get(cd)
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(false);
         let gap: f64 = fields
             .get(cg)
             .and_then(|v| v.trim().parse().ok())
@@ -202,7 +214,10 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
         }
         // 只统计被实际显示的帧(present 数即 fps 口径)
         if !dropped && gap > 0.0 {
-            agg.entry(pid).or_insert_with(|| (app, Vec::new())).1.push(gap);
+            agg.entry(pid)
+                .or_insert_with(|| (app, Vec::new()))
+                .1
+                .push(gap);
         }
     }
     // 流结束(PresentMon 退出):当前窗口不完整,不发布,直接作废并标记不可用
@@ -319,7 +334,12 @@ mod tests {
                 ),
             );
             flush_window(&mut agg, 1_793_000_000, &latest, threshold);
-            latest.lock().unwrap().take().map(|s| s.stutters).unwrap_or(0)
+            latest
+                .lock()
+                .unwrap()
+                .take()
+                .map(|s| s.stutters)
+                .unwrap_or(0)
         };
         assert_eq!(count_with(100.0), 0, "阈值 100ms 时无卡帧");
         assert_eq!(count_with(20.0), 3, "阈值 20ms 时应记到 30/40/50 三次");
@@ -333,8 +353,11 @@ mod tests {
         let reader_view = w.stutter_gap_ms.clone();
         assert_eq!(f64::from_bits(reader_view.load(Ordering::Relaxed)), 100.0);
         w.set_stutter_gap_ms(33.5);
-        assert_eq!(f64::from_bits(reader_view.load(Ordering::Relaxed)), 33.5,
-            "解析线程侧的句柄必须看到热更新后的阈值");
+        assert_eq!(
+            f64::from_bits(reader_view.load(Ordering::Relaxed)),
+            33.5,
+            "解析线程侧的句柄必须看到热更新后的阈值"
+        );
         // 非法值不能写进解析线程
         w.set_stutter_gap_ms(0.0);
         assert_eq!(
@@ -376,10 +399,7 @@ mod tests {
         let _ = child.wait(); // 确保它已经退出
         let w = watch_with(true, Some(child));
         assert!(!w.is_available(), "子进程已退出,不应再报「运行中」");
-        assert!(
-            w.child.lock().unwrap().is_none(),
-            "已退出的句柄应被丢弃"
-        );
+        assert!(w.child.lock().unwrap().is_none(), "已退出的句柄应被丢弃");
     }
 
     /// 活着的子进程仍报可用(正向用例,防止把状态锁死成 false)。

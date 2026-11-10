@@ -133,7 +133,11 @@ const TOP_N: usize = 5;
 /// 只有真正挤进前 N 的条目才会复制进程名 —— 这是 `LagEvent::build` 省掉
 /// 三次全量 `sort_by` + 三次全量 `name.clone()` 的关键。
 fn push_top(list: &mut Vec<TopProc>, pid: u32, name: &str, value: f64) {
-    if list.len() == TOP_N && list.last().is_some_and(|last| value.total_cmp(&last.value).is_lt()) {
+    if list.len() == TOP_N
+        && list
+            .last()
+            .is_some_and(|last| value.total_cmp(&last.value).is_lt())
+    {
         return;
     }
     let pos = list
@@ -229,11 +233,8 @@ impl LagDetector {
         // (留 2 秒容差,容忍采集 tick 抖动;不能用固定样本数,慢 tick 会永不满足)
         let newest = self.window.back()?;
         let cutoff = newest.ts_ms.saturating_sub(seconds * 1000);
-        let in_window: Vec<&MetricSample> = self
-            .window
-            .iter()
-            .filter(|s| s.ts_ms >= cutoff)
-            .collect();
+        let in_window: Vec<&MetricSample> =
+            self.window.iter().filter(|s| s.ts_ms >= cutoff).collect();
         if in_window.len() < 2 {
             return None;
         }
@@ -261,7 +262,12 @@ impl LagDetector {
     ) -> Option<LagEvent> {
         self.window.push_back(sample.clone());
         let cutoff = sample.ts_ms.saturating_sub(WINDOW_S * 1000);
-        while self.window.front().map(|s| s.ts_ms < cutoff).unwrap_or(false) {
+        while self
+            .window
+            .front()
+            .map(|s| s.ts_ms < cutoff)
+            .unwrap_or(false)
+        {
             self.window.pop_front();
         }
         self.hung_cache = hung_windows.to_vec();
@@ -302,14 +308,16 @@ impl LagDetector {
         }) {
             reasons.push(LagReason {
                 kind: "page_faults".into(),
-                detail: format!("硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)", cfg.page_sustain_s),
+                detail: format!(
+                    "硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)",
+                    cfg.page_sustain_s
+                ),
                 value: v,
             });
         }
 
         if let Some(v) = self.sustained(cfg.disk_sustain_s, |s| {
-            (s.disk_avg_sec_transfer >= cfg.disk_sec_transfer)
-                .then_some(s.disk_avg_sec_transfer)
+            (s.disk_avg_sec_transfer >= cfg.disk_sec_transfer).then_some(s.disk_avg_sec_transfer)
         }) {
             reasons.push(LagReason {
                 kind: "disk_latency".into(),
@@ -327,7 +335,10 @@ impl LagDetector {
         }) {
             reasons.push(LagReason {
                 kind: "interrupt".into(),
-                detail: format!("中断时间占比 {v:.0}% 持续 {} 秒(驱动高负载)", cfg.interrupt_sustain_s),
+                detail: format!(
+                    "中断时间占比 {v:.0}% 持续 {} 秒(驱动高负载)",
+                    cfg.interrupt_sustain_s
+                ),
                 value: v,
             });
         }
@@ -343,39 +354,39 @@ impl LagDetector {
         // 帧卡顿:持续渲染(fps>=45)的进程出现明显帧间隔尖峰。
         // 单次尖峰即触发(卡顿本质是瞬时事件),靠冷却去重。
         if let Some(g) = game
-            && g.fps >= 45 && g.max_gap_ms >= cfg.stutter_gap_ms {
-                reasons.push(LagReason {
-                    kind: "frame_stutter".into(),
-                    detail: format!(
-                        "{} 帧间隔尖峰 {:.0} ms(fps {},卡帧 {} 次)",
-                        g.app, g.max_gap_ms, g.fps, g.stutters
-                    ),
-                    value: g.max_gap_ms,
-                });
-            }
+            && g.fps >= 45
+            && g.max_gap_ms >= cfg.stutter_gap_ms
+        {
+            reasons.push(LagReason {
+                kind: "frame_stutter".into(),
+                detail: format!(
+                    "{} 帧间隔尖峰 {:.0} ms(fps {},卡帧 {} 次)",
+                    g.app, g.max_gap_ms, g.fps, g.stutters
+                ),
+                value: g.max_gap_ms,
+            });
+        }
 
         // DPC 风暴:高频 DPC 且可归因到具体驱动(瞬时事件,靠冷却去重)
         if let Some(d) = dpc
-            && d.total as f64 >= cfg.dpc_total_threshold {
-                let (top_name, top_count) = d
-                    .drivers
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| ("未知".into(), 0));
-                let pct = if d.total > 0 {
-                    (top_count as f64 / d.total as f64) * 100.0
-                } else {
-                    0.0
-                };
-                reasons.push(LagReason {
-                    kind: "dpc_driver".into(),
-                    detail: format!(
-                        "DPC {}/秒,主要来自 {}(占 {:.0}%)",
-                        d.total, top_name, pct
-                    ),
-                    value: d.total as f64,
-                });
-            }
+            && d.total as f64 >= cfg.dpc_total_threshold
+        {
+            let (top_name, top_count) = d
+                .drivers
+                .first()
+                .cloned()
+                .unwrap_or_else(|| ("未知".into(), 0));
+            let pct = if d.total > 0 {
+                (top_count as f64 / d.total as f64) * 100.0
+            } else {
+                0.0
+            };
+            reasons.push(LagReason {
+                kind: "dpc_driver".into(),
+                detail: format!("DPC {}/秒,主要来自 {}(占 {:.0}%)", d.total, top_name, pct),
+                value: d.total as f64,
+            });
+        }
 
         // 冷却:同类原因冷却期内不重复触发
         reasons.retain(|r| {
@@ -515,7 +526,11 @@ mod tests {
             .iter()
             .find(|r| r.kind == "dpc_driver")
             .expect("应包含 dpc_driver 原因");
-        assert!(r.detail.contains("nvlddmkm.sys"), "归因应含驱动名: {}", r.detail);
+        assert!(
+            r.detail.contains("nvlddmkm.sys"),
+            "归因应含驱动名: {}",
+            r.detail
+        );
         assert!(r.detail.contains("75%"), "应含占比: {}", r.detail);
         assert_eq!(ev.dpc_top.as_ref().unwrap().drivers[0].0, "nvlddmkm.sys");
     }
@@ -578,7 +593,10 @@ mod tests {
             max_gap_ms: 500.0,
             stutters: 1,
         };
-        assert!(det.feed(&sample(base, 20.0), &[], &[], Some(&idle), None, &cfg).is_none());
+        assert!(
+            det.feed(&sample(base, 20.0), &[], &[], Some(&idle), None, &cfg)
+                .is_none()
+        );
         // fps 高但间隔正常不触发
         let mut det2 = LagDetector::new();
         let smooth = GameSample {
@@ -591,8 +609,7 @@ mod tests {
             stutters: 0,
         };
         assert!(
-            det2
-                .feed(&sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
+            det2.feed(&sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
                 .is_none()
         );
     }
@@ -618,7 +635,14 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..8u64 {
-            if let Some(ev) = det.feed(&page_sample(base + i * 1000, 900.0), &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(
+                &page_sample(base + i * 1000, 900.0),
+                &[],
+                &[],
+                None,
+                None,
+                &cfg,
+            ) {
                 fired = Some(ev);
                 break;
             }
@@ -709,15 +733,7 @@ mod tests {
     }
 
     fn build_with(procs: &[ProcessInfo]) -> LagEvent {
-        LagEvent::build(
-            1,
-            vec![],
-            sample(1, 0.0),
-            procs,
-            vec![],
-            None,
-            None,
-        )
+        LagEvent::build(1, vec![], sample(1, 0.0), procs, vec![], None, None)
     }
 
     #[test]
@@ -767,7 +783,11 @@ mod tests {
         let ev = build_with(&procs);
         assert_eq!(ev.top_cpu.len(), TOP_N);
         let pids: Vec<u32> = ev.top_cpu.iter().map(|p| p.pid).collect();
-        assert_eq!(pids, vec![0, 1, 2, 3, 4], "同值时应按插入顺序取前 {TOP_N} 个");
+        assert_eq!(
+            pids,
+            vec![0, 1, 2, 3, 4],
+            "同值时应按插入顺序取前 {TOP_N} 个"
+        );
     }
 
     #[test]
