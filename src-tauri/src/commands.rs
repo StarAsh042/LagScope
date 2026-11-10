@@ -1,5 +1,7 @@
 //! Tauri 命令层:前端 invoke 的入口。
 
+use std::sync::Arc;
+
 use serde::Serialize;
 
 use sysinfo::Pid;
@@ -132,13 +134,17 @@ pub fn show_main(app: AppHandle) -> Result<(), String> {
 
 /// 最新进程快照(1Hz 由采集线程刷新,进程表每 2s 拉取)
 #[tauri::command]
-pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Vec<ProcessInfo> {
+pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Arc<Vec<ProcessInfo>> {
+    // 直接返回共享快照的 Arc:进程表每 2s 拉一次,深拷贝 300 个 ProcessInfo
+    // (每个含一次 String 分配)纯属浪费,序列化时按引用读取即可
     state.processes.lock().unwrap().clone()
 }
 
 /// 最新系统采样
 #[tauri::command]
-pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<MetricSample> {
+pub fn get_latest_sample(
+    state: State<'_, std::sync::Arc<AppState>>,
+) -> Option<Arc<MetricSample>> {
     state.last_sample.lock().unwrap().clone()
 }
 
@@ -179,8 +185,9 @@ pub fn run_diagnose(
         .lock()
         .unwrap()
         .clone()
+        .map(Arc::unwrap_or_clone)
         .ok_or_else(|| "暂无采样数据".to_string())?;
-    let processes = state.processes.lock().unwrap().clone();
+    let processes = Arc::unwrap_or_clone(state.processes.lock().unwrap().clone());
     let hung = hung_window::detect_hung_windows();
     let game = state
         .frame_monitor

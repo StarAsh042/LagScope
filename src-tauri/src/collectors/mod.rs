@@ -7,6 +7,7 @@ pub mod pdh;
 pub mod presentmon;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -261,9 +262,13 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         }
         let sample = build_sample(&sys, pdh_set.as_ref(), net_rx_bps, net_tx_bps);
 
-        *state.last_sample.lock().unwrap() = Some(sample.clone());
-        *state.processes.lock().unwrap() = processes.clone();
-        let _ = app.emit(EVENT_METRICS, &sample);
+        // 缓存与检测引擎共用同一份数据:每 tick 只有两次 Arc 引用计数自增,
+        // 不再各自深拷贝 300 个进程快照
+        let snapshot = Arc::new(processes);
+        *state.processes.lock().unwrap() = Arc::clone(&snapshot);
+        let sample = Arc::new(sample);
+        *state.last_sample.lock().unwrap() = Some(Arc::clone(&sample));
+        let _ = app.emit(EVENT_METRICS, sample.as_ref());
 
         // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
         let cfg = state.config.lock().unwrap().clone();
@@ -288,8 +293,8 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
             let _ = app.emit(EVENT_DPC, d);
         }
         if let Some(event) = detector.feed(
-            sample,
-            &processes,
+            sample.as_ref(),
+            snapshot.as_slice(),
             &hung_watch.snapshot(),
             game.as_ref(),
             dpc.as_ref(),
