@@ -3,6 +3,7 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  import ErrorBoundary from "$lib/components/ErrorBoundary.svelte";
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
@@ -27,6 +28,17 @@
   import type { MetricSample } from "$lib/types";
 
   let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
+
+  /** 兜底界面里显示出错的是哪一块,避免用户以为整个程序挂了 */
+  const tabLabel = $derived(
+    tab === "dashboard"
+      ? "仪表盘"
+      : tab === "events"
+        ? "卡顿事件"
+        : tab === "startup"
+          ? "启动项"
+          : "设置"
+  );
 
   // macOS 上主修饰键是 Cmd,提示文案跟着平台走
   const settingsTitle = $derived(
@@ -198,6 +210,9 @@
     </div>
   </header>
 
+  <!-- key:切 tab 时重建边界,否则某一页的异常会一直锁着后续页面 -->
+  {#key tab}
+  <ErrorBoundary label={tabLabel}>
   {#if tab === "dashboard"}
     <section class="gauges">
     <Gauge label="CPU" value={metrics.latest?.cpuTotal ?? null} sub={cpuSub} />
@@ -341,6 +356,8 @@
   {:else}
     <SettingsPanel />
   {/if}
+  </ErrorBoundary>
+  {/key}
 </main>
 
 <style>
