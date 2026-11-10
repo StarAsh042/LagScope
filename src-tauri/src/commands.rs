@@ -220,9 +220,10 @@ pub fn export_lag_events(
     limit: Option<u32>,
 ) -> Result<ExportResult, String> {
     let fmt = ExportFormat::from_name(&format)?;
+    // 默认导出全库:上限取用户设置的保留条数,而不是编译期常量
     let events = state
         .db
-        .list_events(limit.unwrap_or(crate::store::db::RETAIN_ROWS))?;
+        .list_events(limit.unwrap_or_else(|| state.db.retain_rows()))?;
     if events.is_empty() {
         return Err("还没有卡顿事件可以导出".to_string());
     }

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use rusqlite::Connection;
 
@@ -15,8 +15,8 @@ pub const PRUNE_EVERY_INSERTS: u32 = 50;
 
 pub struct Db {
     conn: Mutex<Connection>,
-    /// 保留上限(条)
-    retain_rows: u32,
+    /// 保留上限(条);设置页可热更新,故用原子量而不是普通字段
+    retain_rows: AtomicU32,
     /// 每写入多少条触发一次清理
     prune_every: u32,
     /// 自上次清理以来成功写入的条数(Relaxed 足够:只做阈值判断)
@@ -59,7 +59,7 @@ impl Db {
         prune_inner(&conn, retain_rows)?;
         Ok(Self {
             conn: Mutex::new(conn),
-            retain_rows,
+            retain_rows: AtomicU32::new(retain_rows),
             prune_every,
             inserts_since_prune: AtomicU64::new(0),
         })
@@ -98,16 +98,33 @@ impl Db {
         let seen = self.inserts_since_prune.fetch_add(1, Ordering::Relaxed) + 1;
         if seen >= self.prune_every as u64 {
             self.inserts_since_prune.store(0, Ordering::Relaxed);
-            let _ = prune_inner(&conn, self.retain_rows);
+            let _ = prune_inner(&conn, self.retain_rows.load(Ordering::Relaxed));
         }
         Ok(id)
+    }
+
+    /// 当前保留上限(条);导出等需要"全库"的调用方用它作默认上限
+    pub fn retain_rows(&self) -> u32 {
+        self.retain_rows.load(Ordering::Relaxed)
+    }
+
+    /// 调整保留上限并立即清理一次,返回被删除的条数。
+    ///
+    /// 设置页把上限改小时,如果只更新字段,超出部分要等到下一条事件写入
+    /// (可能几天后)才会被裁掉;这里顺手清一次,用户能立刻看到库变小。
+    /// 改大时不删任何行,清理自然是 no-op。
+    pub fn set_retain_rows(&self, retain_rows: u32) -> Result<usize, String> {
+        let retain_rows = retain_rows.max(1);
+        self.retain_rows.store(retain_rows, Ordering::Relaxed);
+        let conn = self.conn.lock().unwrap();
+        prune_inner(&conn, retain_rows)
     }
 
     /// 立即执行一次保留清理,返回删除行数(仅测试用:长跑由 insert_event 自动触发)
     #[cfg(test)]
     pub fn prune(&self) -> Result<usize, String> {
         let conn = self.conn.lock().unwrap();
-        prune_inner(&conn, self.retain_rows)
+        prune_inner(&conn, self.retain_rows.load(Ordering::Relaxed))
     }
 
     /// 当前事件条数(仅测试用,故不进 lib 构建)
@@ -416,6 +433,42 @@ mod tests {
         insert_n(&db, 3, 1_700_000_000_000);
         assert_eq!(db.prune().unwrap(), 0);
         assert_eq!(db.count_events().unwrap(), 3);
+        drop(db);
+        cleanup(&p);
+    }
+
+    #[test]
+    fn shrinking_retention_prunes_immediately() {
+        let p = temp_db_path();
+        // 清理周期调到很大:只有显式改上限才该发生裁剪
+        let db = Db::open_with_retention(&p, 100, 1000).unwrap();
+        insert_n(&db, 20, 1_700_000_000_000);
+        assert_eq!(db.count_events().unwrap(), 20);
+        assert_eq!(db.retain_rows(), 100, "初始上限应来自 open 参数");
+
+        // 调小上限:同一瞬间就该裁到新上限,而不是等下一条事件写入
+        let removed = db.set_retain_rows(T_RETAIN).expect("改上限必须成功");
+        assert_eq!(removed, (20 - T_RETAIN) as usize, "返回的应是裁掉的条数");
+        assert_eq!(db.retain_rows(), T_RETAIN);
+        assert_eq!(db.count_events().unwrap(), T_RETAIN);
+        // 留下的是最新的那批
+        let rows = db.list_events(100).unwrap();
+        assert_eq!(rows.first().unwrap().ts_ms, 1_700_000_000_000 + 19);
+        assert_eq!(
+            rows.last().unwrap().ts_ms,
+            1_700_000_000_000 + (20 - T_RETAIN) as u64
+        );
+
+        // 调大上限不删任何行,后续写入也不应被旧上限卡住
+        assert_eq!(db.set_retain_rows(50).unwrap(), 0);
+        assert_eq!(db.retain_rows(), 50);
+        insert_n(&db, 10, 1_700_000_100_000);
+        assert_eq!(db.count_events().unwrap(), T_RETAIN + 10);
+
+        // 0 会让保留策略恒删全表,必须夹到至少 1
+        assert_eq!(db.set_retain_rows(0).unwrap(), (T_RETAIN + 9) as usize);
+        assert_eq!(db.retain_rows(), 1);
+        assert_eq!(db.count_events().unwrap(), 1);
         drop(db);
         cleanup(&p);
     }

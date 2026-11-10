@@ -26,6 +26,7 @@
     stutterGapMs: number;
     dpcTotalThreshold: number;
     cooldownS: number;
+    retainRows: number;
     closeToTray: boolean;
     autostart: boolean;
     enableFrameMonitor: boolean;
@@ -161,6 +162,16 @@
       <label>
         <span>同类事件冷却 秒</span>
         <input type="number" min="10" max="600" bind:value={s.cooldownS} />
+      </label>
+      <label>
+        <span>事件库保留条数</span>
+        <input
+          type="number"
+          min="50"
+          max="20000"
+          step="50"
+          bind:value={s.retainRows}
+        />
       </label>
     </div>
 
