@@ -15,11 +15,13 @@
     fmtBytesPerSec,
     metrics,
     startMetrics,
+    stopMetrics,
   } from "$lib/stores/metrics.svelte";
   import {
     diagnoseNow,
     lagEvents,
     startLagEvents,
+    stopLagEvents,
   } from "$lib/stores/lagEvents.svelte";
   import type { MetricSample } from "$lib/types";
 
@@ -28,6 +30,13 @@
   onMount(() => {
     void startMetrics();
     void startLagEvents();
+
+    // 主窗口与迷你窗是两个路由页面,来回切换会重新挂载本组件;
+    // 不撤掉轮询,每切一次就多一套 2s/30s 定时器与事件监听。
+    return () => {
+      stopMetrics();
+      stopLagEvents();
+    };
   });
 
   // uPlot AlignedData 为列主序:[xs, ys1, ys2, ...]

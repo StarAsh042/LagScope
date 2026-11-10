@@ -20,37 +20,43 @@ export const metrics = $state({
 });
 
 let started = false;
+/** 本模块创建的定时器;stopMetrics() 负责全部撤掉 */
+const timers: ReturnType<typeof setInterval>[] = [];
+/** Tauri 事件监听的注销函数,同样交给 stopMetrics() */
+const unlisteners: (() => void)[] = [];
 
 export async function startMetrics() {
   if (started) return;
   started = true;
 
   // 订阅采集线程的 1Hz 推送
-  await listen<MetricSample>("metrics:sample", (e) => {
+  unlisteners.push(await listen<MetricSample>("metrics:sample", (e) => {
     metrics.latest = e.payload;
     metrics.connected = true;
     metrics.history.push(e.payload);
     if (metrics.history.length > HISTORY_LEN) {
       metrics.history.splice(0, metrics.history.length - HISTORY_LEN);
     }
-  });
+  }));
 
   // 帧监测(PresentMon):有渲染活动时 1Hz
-  await listen<GameSample>("game:sample", (e) => {
+  unlisteners.push(await listen<GameSample>("game:sample", (e) => {
     metrics.game = e.payload;
     metrics.gameHistory.push(e.payload);
     if (metrics.gameHistory.length > HISTORY_LEN) {
       metrics.gameHistory.splice(0, metrics.gameHistory.length - HISTORY_LEN);
     }
-  });
+  }));
 
   // 陈旧数据守卫:数据流断掉(如监测器崩溃)后清空显示,避免幽灵数值
-  setInterval(() => {
-    const now = Date.now();
-    if (metrics.game && now - metrics.game.tsMs > 5000) {
-      metrics.game = null;
-    }
-  }, 3000);
+  timers.push(
+    setInterval(() => {
+      const now = Date.now();
+      if (metrics.game && now - metrics.game.tsMs > 5000) {
+        metrics.game = null;
+      }
+    }, 3000)
+  );
 
   // 启动时先补一次最新值(避免图表空白 1 秒)
   const seed = await invoke<MetricSample | null>("get_latest_sample");
@@ -68,7 +74,7 @@ export async function startMetrics() {
     }
   };
   await pollProcesses();
-  setInterval(pollProcesses, 2000);
+  timers.push(setInterval(pollProcesses, 2000));
 
   // 磁盘容量(30s 足够)
   const pollDisks = async () => {
@@ -79,7 +85,23 @@ export async function startMetrics() {
     }
   };
   await pollDisks();
-  setInterval(pollDisks, 30000);
+  timers.push(setInterval(pollDisks, 30000));
+}
+
+/**
+ * 撤掉全部轮询定时器并允许重新 start。
+ *
+ * 事件监听(`listen`)由 Tauri 的 unlisten 管理,这里只管定时器;
+ * 前端路由切换时(仪表盘 ⇄ 迷你窗)必须调用,否则每进一次多一套轮询。
+ */
+export function stopMetrics() {
+  while (timers.length) {
+    clearInterval(timers.pop()!);
+  }
+  while (unlisteners.length) {
+    unlisteners.pop()!();
+  }
+  started = false;
 }
 
 // ---- 格式化工具 ----
