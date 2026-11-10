@@ -185,8 +185,8 @@
 
 <style>
   .panel {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 10px 12px;
     display: flex;
@@ -205,12 +205,12 @@
   .title {
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   input {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 6px;
     padding: 5px 10px;
     font-size: 12px;
@@ -218,10 +218,10 @@
     outline: none;
   }
   input:focus {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .err {
-    color: #e5484d;
+    color: var(--err);
     font-size: 12px;
     margin-bottom: 6px;
   }
@@ -238,11 +238,11 @@
   th {
     position: sticky;
     top: 0;
-    background: var(--panel, #131926);
-    color: var(--text-dim, #8b94a7);
+    background: var(--panel);
+    color: var(--text-dim);
     text-align: left;
     padding: 6px 8px;
-    border-bottom: 1px solid var(--border, #232a3a);
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
     user-select: none;
     font-weight: 500;
@@ -254,8 +254,8 @@
   }
   td {
     padding: 5px 8px;
-    border-bottom: 1px solid #1a2130;
-    color: var(--text, #e8ecf4);
+    border-bottom: 1px solid var(--panel-alt);
+    color: var(--text);
     white-space: nowrap;
   }
   td.num {
@@ -268,17 +268,17 @@
     text-overflow: ellipsis;
   }
   tr:hover td {
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   .hot {
-    color: #f5a623;
+    color: var(--warn);
     font-weight: 600;
   }
   .badge {
     display: inline-block;
-    background: #3a2b12;
-    color: #f5a623;
-    border: 1px solid #6b4d16;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
     border-radius: 4px;
     font-size: 10px;
     padding: 1px 5px;
@@ -287,15 +287,15 @@
   }
   .kill {
     background: transparent;
-    border: 1px solid #593033;
-    color: #e5484d;
+    border: 1px solid var(--err-border-soft);
+    color: var(--err);
     border-radius: 5px;
     font-size: 11px;
     padding: 2px 8px;
     cursor: pointer;
   }
   .kill:hover {
-    background: #2a1a1d;
+    background: var(--err-bg-hover);
   }
   .kill:disabled {
     opacity: 0.5;
@@ -313,8 +313,8 @@
     z-index: 50;
   }
   .confirm {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 16px 18px;
     width: 340px;
@@ -323,17 +323,17 @@
   .confirm-title {
     font-size: 14px;
     font-weight: 600;
-    color: var(--text, #e8ecf4);
+    color: var(--text);
     margin-bottom: 8px;
   }
   .confirm-body {
     font-size: 12.5px;
     line-height: 1.7;
-    color: var(--text, #e8ecf4);
+    color: var(--text);
     margin-bottom: 14px;
   }
   .confirm-body .dim {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     margin-left: 6px;
     font-variant-numeric: tabular-nums;
   }
@@ -344,25 +344,25 @@
   }
   .act {
     background: transparent;
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 6px;
     font-size: 12px;
     padding: 4px 14px;
     cursor: pointer;
   }
   .act:hover {
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   .act:focus-visible {
-    outline: 2px solid #3b6cd4;
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
   .act.danger {
-    border-color: #593033;
-    color: #e5484d;
+    border-color: var(--err-border-soft);
+    color: var(--err);
   }
   .act.danger:hover {
-    background: #2a1a1d;
+    background: var(--err-bg-hover);
   }
 </style>

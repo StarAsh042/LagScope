@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { levelColor } from "$lib/theme";
+
   // 环形仪表:0-100%,或传入 rawText 显示自定义数值(如 FPS)
   let {
     label,
@@ -18,10 +20,7 @@
   const CIRC = 2 * Math.PI * R;
 
   const pct = $derived(value == null ? 0 : Math.min(100, Math.max(0, value)));
-  const color = $derived(
-    colorOverride ??
-      (pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c")
-  );
+  const color = $derived(colorOverride ?? levelColor(pct));
 </script>
 
 <div class="gauge">
@@ -67,13 +66,13 @@
     stroke-linecap: round;
   }
   .track {
-    stroke: var(--track, #232a3a);
+    stroke: var(--track);
   }
   .bar {
     transition: stroke-dasharray 0.6s ease, stroke 0.4s ease;
   }
   text {
-    fill: var(--text, #e8ecf4);
+    fill: var(--text);
     text-anchor: middle;
     dominant-baseline: middle;
   }
@@ -83,7 +82,7 @@
   }
   .unit {
     font-size: 10px;
-    fill: var(--text-dim, #8b94a7);
+    fill: var(--text-dim);
   }
   .meta {
     display: flex;
@@ -93,12 +92,12 @@
   }
   .label {
     font-size: 12px;
-    color: var(--text, #e8ecf4);
+    color: var(--text);
     font-weight: 500;
   }
   .sub {
     font-size: 11px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     white-space: nowrap;
     max-width: 112px;
     overflow: hidden;

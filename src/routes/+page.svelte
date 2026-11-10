@@ -25,6 +25,7 @@
     stopLagEvents,
   } from "$lib/stores/lagEvents.svelte";
   import { isSettingsShortcut, settingsHint } from "$lib/shortcuts";
+  import { levelColor, token } from "$lib/theme";
   import type { MetricSample } from "$lib/types";
 
   let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
@@ -145,7 +146,7 @@
   const temp = $derived(metrics.latest?.temperatureC ?? null);
   const tempRaw = $derived(temp == null ? undefined : `${Math.round(temp)}°`);
   const tempColor = $derived(
-    temp == null ? undefined : temp >= 75 ? "#e5484d" : temp >= 60 ? "#f5a623" : "#3dd68c"
+    temp == null ? undefined : levelColor(temp, 75, 60)
   );
 
   // 底栏指标:先拼成数组再统一插分隔符。此前是手写 "·" 字面量,断行处多打了
@@ -269,8 +270,8 @@
       yMax={100}
       unit="%"
       series={[
-        { label: "总", color: "#3b6cd4" },
-        { label: "核", color: "#3b6cd466" },
+        { label: "总", color: token("--chart-cpu", "#3b6cd4") },
+        { label: "核", color: token("--chart-cpu-soft", "#3b6cd466") },
       ]}
     />
     <RollingChart
@@ -279,8 +280,8 @@
       yMax={100}
       unit="%"
       series={[
-        { label: "物理", color: "#3dd68c" },
-        { label: "提交", color: "#f5a623" },
+        { label: "物理", color: token("--chart-mem-used", "#3dd68c") },
+        { label: "提交", color: token("--chart-mem-commit", "#f5a623") },
       ]}
     />
     <RollingChart
@@ -288,9 +289,9 @@
       data={diskData}
       unit="MB/s"
       series={[
-        { label: "读 MB/s", color: "#9a6cd4" },
-        { label: "写 MB/s", color: "#d46cb4" },
-        { label: "活跃 %", color: "#f5a623" },
+        { label: "读 MB/s", color: token("--chart-disk-read", "#9a6cd4") },
+        { label: "写 MB/s", color: token("--chart-disk-write", "#d46cb4") },
+        { label: "活跃 %", color: token("--chart-disk-active", "#f5a623") },
       ]}
     />
     <RollingChart
@@ -298,8 +299,8 @@
       data={netData}
       unit="KB/s"
       series={[
-        { label: "下行", color: "#3dd68c" },
-        { label: "上行", color: "#3b6cd4" },
+        { label: "下行", color: token("--chart-net-rx", "#3dd68c") },
+        { label: "上行", color: token("--chart-net-tx", "#3b6cd4") },
       ]}
     />
     {#if metrics.latest?.gpuUtilPct != null || metrics.latest?.gpuMemMb != null}
@@ -308,8 +309,8 @@
         data={gpuData}
         unit=""
         series={[
-          { label: "3D %", color: "#f5a623" },
-          { label: "显存 MB", color: "#8b94a7" },
+          { label: "3D %", color: token("--chart-gpu-util", "#f5a623") },
+          { label: "显存 MB", color: token("--chart-gpu-mem", "#8b94a7") },
         ]}
       />
     {/if}
@@ -318,8 +319,8 @@
       data={chartData((s) => [s.dpcPerSec, s.pageInputPerSec])}
       unit="/s"
       series={[
-        { label: "DPC/s", color: "#e5484d" },
-        { label: "硬缺页/s", color: "#f5a623" },
+        { label: "DPC/s", color: token("--chart-dpc", "#e5484d") },
+        { label: "硬缺页/s", color: token("--chart-page-fault", "#f5a623") },
       ]}
     />
     {#if metrics.gameHistory.length}
@@ -328,8 +329,8 @@
         data={gameData}
         unit="FPS"
         series={[
-          { label: "FPS", color: "#3dd68c" },
-          { label: "最大间隔 ms", color: "#e5484d" },
+          { label: "FPS", color: token("--chart-fps", "#3dd68c") },
+          { label: "最大间隔 ms", color: token("--chart-frame-gap", "#e5484d") },
         ]}
       />
     {/if}
@@ -406,18 +407,18 @@
   }
   nav button:hover {
     color: var(--text);
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   nav button.active {
     color: var(--text);
-    background: #1a2130;
+    background: var(--panel-alt);
     border-color: var(--border);
   }
   .badge {
     display: inline-block;
     margin-left: 6px;
-    background: var(--err, #e5484d);
-    color: #fff;
+    background: var(--err);
+    color: var(--on-accent);
     font-size: 10px;
     border-radius: 8px;
     padding: 1px 6px;
@@ -429,16 +430,16 @@
     gap: 12px;
   }
   .diag {
-    background: #3b6cd4;
+    background: var(--accent);
     border: none;
-    color: #fff;
+    color: var(--on-accent);
     border-radius: 8px;
     padding: 6px 16px;
     font-size: 13px;
     cursor: pointer;
   }
   .diag:hover {
-    background: #4a7be0;
+    background: var(--accent-hover);
   }
   .diag:disabled {
     opacity: 0.6;
@@ -446,16 +447,16 @@
   }
   .mini-toggle {
     background: transparent;
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text-dim, #8b94a7);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
     border-radius: 8px;
     padding: 5px 12px;
     font-size: 12.5px;
     cursor: pointer;
   }
   .mini-toggle:hover {
-    color: var(--text, #e8ecf4);
-    border-color: #3b6cd4;
+    color: var(--text);
+    border-color: var(--accent);
   }
   .status {
     font-size: 12px;

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
+import { token } from "$lib/theme";
 import type { LagEvent } from "$lib/types";
 import {
   RANGE_OPTIONS,
@@ -161,21 +162,24 @@ export function select(ev: LagEvent) {
   lagEvents.selected = ev;
 }
 
-/** 原因类型的展示名与配色 */
-export const KIND_META: Record<string, { label: string; color: string }> = {
-  cpu: { label: "CPU 满载", color: "#e5484d" },
-  mem_pressure: { label: "内存压力", color: "#f5a623" },
-  page_faults: { label: "硬缺页", color: "#e28c3a" },
-  disk_latency: { label: "磁盘延迟", color: "#d46cb4" },
-  interrupt: { label: "中断高载", color: "#9a6cd4" },
-  hung_window: { label: "窗口假死", color: "#3b6cd4" },
-  frame_stutter: { label: "游戏卡帧", color: "#3dd68c" },
-  dpc_driver: { label: "DPC 驱动风暴", color: "#e28c3a" },
-  manual: { label: "手动诊断", color: "#8b94a7" },
+/** 原因类型的展示名与配色:颜色令牌定义在 app.css 的 :root,这里只存令牌名与兜底值 */
+export const KIND_META: Record<string, { label: string; token: string; fallback: string }> = {
+  cpu: { label: "CPU 满载", token: "--kind-cpu", fallback: "#e5484d" },
+  mem_pressure: { label: "内存压力", token: "--kind-mem", fallback: "#f5a623" },
+  page_faults: { label: "硬缺页", token: "--kind-page-fault", fallback: "#e28c3a" },
+  disk_latency: { label: "磁盘延迟", token: "--kind-disk", fallback: "#d46cb4" },
+  interrupt: { label: "中断高载", token: "--kind-interrupt", fallback: "#9a6cd4" },
+  hung_window: { label: "窗口假死", token: "--kind-hung", fallback: "#3b6cd4" },
+  frame_stutter: { label: "游戏卡帧", token: "--kind-frame", fallback: "#3dd68c" },
+  dpc_driver: { label: "DPC 驱动风暴", token: "--kind-dpc", fallback: "#e28c3a" },
+  manual: { label: "手动诊断", token: "--kind-manual", fallback: "#8b94a7" },
 };
 
-export function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind, color: "#8b94a7" };
+/** 令牌在调用时才解析:模块初始化阶段样式表可能还没进 DOM */
+export function kindMeta(kind: string): { label: string; color: string } {
+  const meta = KIND_META[kind];
+  if (!meta) return { label: kind, color: token("--kind-manual", "#8b94a7") };
+  return { label: meta.label, color: token(meta.token, meta.fallback) };
 }
 
 export function fmtTs(tsMs: number): string {

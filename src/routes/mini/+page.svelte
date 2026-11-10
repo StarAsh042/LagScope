@@ -9,6 +9,7 @@
     stopMetrics,
   } from "$lib/stores/metrics.svelte";
   import { isDismissShortcut } from "$lib/shortcuts";
+  import { levelColor } from "$lib/theme";
 
   /** Esc 收起悬浮窗(和其他浮层一致) */
   function onKeydown(e: KeyboardEvent) {
@@ -58,7 +59,7 @@
   });
 
   const barColor = (pct: number) =>
-    pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c";
+    levelColor(pct);
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -93,8 +94,8 @@
   .mini {
     position: fixed;
     inset: 0;
-    background: rgba(13, 18, 32, 0.92);
-    border: 1px solid #232a3a;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 8px 10px;
     display: flex;
@@ -110,13 +111,13 @@
     right: 4px;
     background: transparent;
     border: none;
-    color: #8b94a7;
+    color: var(--text-dim);
     font-size: 10px;
     cursor: pointer;
     padding: 2px 5px;
   }
   .close:hover {
-    color: #e8ecf4;
+    color: var(--text);
   }
   .row {
     display: flex;
@@ -126,13 +127,13 @@
   .k {
     width: 30px;
     font-size: 10.5px;
-    color: #8b94a7;
+    color: var(--text-dim);
     flex: none;
   }
   .bar {
     flex: 1;
     height: 6px;
-    background: #1d2434;
+    background: var(--track-deep);
     border-radius: 3px;
     overflow: hidden;
   }
@@ -146,7 +147,7 @@
     width: 74px;
     text-align: right;
     font-size: 10.5px;
-    color: #e8ecf4;
+    color: var(--text);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;

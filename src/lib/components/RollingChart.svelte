@@ -3,6 +3,7 @@
   import { untrack } from "svelte";
   import uPlot from "uplot";
   import "uplot/dist/uPlot.min.css";
+  import { token } from "$lib/theme";
 
   let {
     title,
@@ -46,15 +47,15 @@
   function opts(): uPlot.Options {
     const axes: uPlot.Axis[] = [
       {
-        stroke: "#5a647a",
-        grid: { stroke: "#1d2434" },
-        ticks: { stroke: "#1d2434" },
+        stroke: token("--chart-axis", "#5a647a"),
+        grid: { stroke: token("--chart-grid", "#1d2434") },
+        ticks: { stroke: token("--chart-grid", "#1d2434") },
         values: timeAxisValues,
       },
       {
-        stroke: "#5a647a",
-        grid: { stroke: "#1d2434" },
-        ticks: { stroke: "#1d2434" },
+        stroke: token("--chart-axis", "#5a647a"),
+        grid: { stroke: token("--chart-grid", "#1d2434") },
+        ticks: { stroke: token("--chart-grid", "#1d2434") },
         label: unit || undefined,
       },
     ];
@@ -125,8 +126,8 @@
 
 <style>
   .chart-card {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 10px 12px 6px;
     display: flex;
@@ -137,7 +138,7 @@
   .title {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .plot {
     width: 100%;
@@ -147,7 +148,7 @@
   .plot :global(.u-legend) {
     font-size: 11px;
     line-height: 1.4;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     margin: 0;
     text-align: left;
   }
@@ -160,7 +161,7 @@
     padding: 0 8px 0 0;
   }
   .plot :global(.u-legend .u-value) {
-    color: var(--text, #e8ecf4);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
   }
   .plot :global(.u-cursor-x) {

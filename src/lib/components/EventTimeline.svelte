@@ -185,8 +185,8 @@
 
 <style>
   .timeline {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 10px;
     display: flex;
@@ -201,7 +201,7 @@
     gap: 8px;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     margin-bottom: 8px;
   }
   .tools {
@@ -213,15 +213,15 @@
     font-weight: 600;
     padding: 2px 7px;
     border-radius: 5px;
-    border: 1px solid var(--border, #232a3a);
-    background: var(--bg, #0d1220);
-    color: var(--text-dim, #8b94a7);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
     cursor: pointer;
     font-family: inherit;
   }
   .mini:hover:not(:disabled) {
-    border-color: #3b6cd4;
-    color: var(--text, #e8ecf4);
+    border-color: var(--accent);
+    color: var(--text);
   }
   .mini:disabled {
     opacity: 0.4;
@@ -244,16 +244,16 @@
     font-size: 12px;
     padding: 5px 22px 5px 8px;
     border-radius: 6px;
-    border: 1px solid var(--border, #232a3a);
-    background: var(--bg, #0d1220);
-    color: var(--text, #e8ecf4);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
   }
   .search input::placeholder {
-    color: #5b6478;
+    color: var(--placeholder);
   }
   .search input:focus {
     outline: none;
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .search input::-webkit-search-cancel-button {
     display: none;
@@ -265,14 +265,14 @@
     transform: translateY(-50%);
     border: none;
     background: none;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     font-size: 14px;
     line-height: 1;
     padding: 2px 4px;
     cursor: pointer;
   }
   .clear:hover {
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
   .range,
   .kinds {
@@ -286,24 +286,24 @@
     font-family: inherit;
     padding: 2px 7px;
     border-radius: 5px;
-    border: 1px solid var(--border, #232a3a);
-    background: var(--bg, #0d1220);
-    color: var(--text-dim, #8b94a7);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
     cursor: pointer;
   }
   .chip:hover {
-    border-color: #3b6cd4;
-    color: var(--text, #e8ecf4);
+    border-color: var(--accent);
+    color: var(--text);
   }
   .chip.on {
-    border-color: #3b6cd4;
-    background: #16203a;
-    color: var(--text, #e8ecf4);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
   }
   .chip.kind.on {
-    border-color: var(--k, #3b6cd4);
-    color: var(--k, #3b6cd4);
-    background: color-mix(in srgb, var(--k, #3b6cd4) 16%, transparent);
+    border-color: var(--k, var(--accent));
+    color: var(--k, var(--accent));
+    background: color-mix(in srgb, var(--k, var(--accent)) 16%, transparent);
   }
   .chip .n {
     opacity: 0.6;
@@ -314,34 +314,34 @@
   }
   .note {
     font-size: 11.5px;
-    color: var(--text-dim, #8b94a7);
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
+    color: var(--text-dim);
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 8px;
     margin-bottom: 8px;
     word-break: break-all;
   }
   .note.ok {
-    border-color: #1f4a33;
-    color: #3dd68c;
+    border-color: var(--ok-border);
+    color: var(--ok);
   }
   .note.err {
-    border-color: #5a2126;
-    color: #e5484d;
+    border-color: var(--err-border);
+    color: var(--err);
   }
   .link {
     background: none;
     border: none;
     padding: 0 0 0 6px;
-    color: #3b6cd4;
+    color: var(--accent);
     font: inherit;
     font-size: 11.5px;
     cursor: pointer;
     text-decoration: underline;
   }
   .empty {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     font-size: 12.5px;
     padding: 24px 12px;
     text-align: center;
@@ -360,8 +360,8 @@
     gap: 8px;
   }
   .item {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px 10px;
     cursor: pointer;
@@ -370,11 +370,11 @@
     font: inherit;
   }
   .item:hover {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .item.active {
-    border-color: #3b6cd4;
-    background: #16203a;
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
   .row1 {
     display: flex;
@@ -384,12 +384,12 @@
   .ts {
     font-size: 12.5px;
     font-weight: 600;
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
   .fresh {
     font-size: 10px;
-    background: #e5484d;
-    color: #fff;
+    background: var(--err);
+    color: var(--on-accent);
     border-radius: 4px;
     padding: 1px 5px;
   }
@@ -408,6 +408,6 @@
   .row3 {
     margin-top: 4px;
     font-size: 11.5px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
 </style>
