@@ -23,9 +23,26 @@
     startLagEvents,
     stopLagEvents,
   } from "$lib/stores/lagEvents.svelte";
+  import { isSettingsShortcut, settingsHint } from "$lib/shortcuts";
   import type { MetricSample } from "$lib/types";
 
   let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
+
+  // macOS 上主修饰键是 Cmd,提示文案跟着平台走
+  const settingsTitle = $derived(
+    settingsHint(
+      typeof navigator !== "undefined" &&
+        /Mac|iPhone|iPad/.test(navigator.platform)
+    )
+  );
+
+  /** Ctrl+, / Cmd+, 直接跳到设置页 */
+  function onKeydown(e: KeyboardEvent) {
+    if (isSettingsShortcut(e)) {
+      e.preventDefault();
+      tab = "settings";
+    }
+  }
 
   onMount(() => {
     void startMetrics();
@@ -132,6 +149,8 @@
   });
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <main>
   <header>
     <div class="brand">
@@ -158,6 +177,7 @@
         <button
           class:active={tab === "settings"}
           onclick={() => (tab = "settings")}
+          title={settingsTitle}
         >
           设置
         </button>
