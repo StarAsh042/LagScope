@@ -61,6 +61,11 @@ impl Db {
                     .map(serde_json::to_string)
                     .transpose()
                     .map_err(|err| err.to_string())?,
+                e.dpc_top
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(|err| err.to_string())?,
             ],
         )
         .map_err(|err| format!("插入事件失败: {err}"))?;
@@ -112,5 +117,130 @@ impl Db {
             });
         }
         Ok(events)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::Db;
+    use crate::collectors::MetricSample;
+    use crate::engine::lag_detector::{DpcSample, GameSample, LagEvent, LagReason, TopProc};
+
+    fn temp_db_path() -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        // 测试库落在工作区内 target/（沙箱可写），避免系统 TEMP 被拒导致误判红灯
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("roundtrip-dbs");
+        std::fs::create_dir_all(&dir).expect("创建测试库目录失败");
+        dir.join(format!(
+            "lagscope_roundtrip_{}_{}_{}.sqlite",
+            std::process::id(),
+            nanos,
+            seq
+        ))
+    }
+
+    fn fixture(game: Option<GameSample>, dpc: Option<DpcSample>) -> LagEvent {
+        LagEvent {
+            id: None,
+            ts_ms: 1_700_000_000_000,
+            reasons: vec![LagReason {
+                kind: "page_faults".into(),
+                detail: "硬缺页".into(),
+                value: 512.0,
+            }],
+            counters: MetricSample {
+                page_input_per_sec: 512.0,
+                ..Default::default()
+            },
+            top_cpu: vec![TopProc {
+                pid: 1,
+                name: "a.exe".into(),
+                value: 99.0,
+            }],
+            top_mem: vec![],
+            top_disk: vec![],
+            hung_windows: vec!["卡死窗口".into()],
+            game,
+            dpc_top: dpc,
+        }
+    }
+
+    fn assert_roundtrip(game: Option<GameSample>, dpc: Option<DpcSample>) {
+        let p = temp_db_path();
+        let db = Db::open(&p).unwrap();
+        let mut ev = fixture(game, dpc);
+        let id = db
+            .insert_event(&ev)
+            .expect("insert_event 必须成功（9 参 = 9 占位符）");
+        assert!(id > 0, "AC-6: 入库后 id 必须为正整数");
+        ev.id = Some(id);
+        let rows = db.list_events(10).unwrap();
+        let row = rows
+            .iter()
+            .find(|x| x.id == Some(id))
+            .expect("AC-5: list_events 必须读回该条");
+        // LagEvent 无 PartialEq/Deserialize；用 serde_json::to_value 逐字段比对，跳过 id
+        let a = serde_json::to_value(&ev).unwrap();
+        let b = serde_json::to_value(row).unwrap();
+        for k in [
+            "tsMs", "reasons", "counters", "topCpu", "topMem", "topDisk", "hungWindows", "game",
+            "dpcTop",
+        ] {
+            assert_eq!(a.get(k), b.get(k), "字段 {k} 往返不一致（AC-5 逐字段相等）");
+        }
+        drop(db);
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", p.display(), suffix));
+        }
+    }
+
+    #[test]
+    fn roundtrip_both_some() {
+        assert_roundtrip(
+            Some(GameSample {
+                app: "game.exe".into(),
+                fps: 42,
+                ..Default::default()
+            }),
+            Some(DpcSample {
+                total: 9000,
+                drivers: vec![("dxgmms2.sys".into(), 7000)],
+                ..Default::default()
+            }),
+        );
+    }
+
+    #[test]
+    fn roundtrip_both_none() {
+        assert_roundtrip(None, None);
+    }
+
+    #[test]
+    fn roundtrip_only_game_some() {
+        assert_roundtrip(
+            Some(GameSample {
+                app: "game.exe".into(),
+                ..Default::default()
+            }),
+            None,
+        );
+    }
+
+    #[test]
+    fn roundtrip_only_dpc_some() {
+        assert_roundtrip(
+            None,
+            Some(DpcSample {
+                total: 9000,
+                ..Default::default()
+            }),
+        );
     }
 }
