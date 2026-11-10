@@ -4,6 +4,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import type { LagEvent } from "$lib/types";
+import {
+  RANGE_OPTIONS,
+  type RangeKey,
+  toggleKind,
+} from "$lib/timeline-filter";
 
 /** 导出落盘结果 */
 export interface ExportResult {
@@ -22,6 +27,28 @@ export const lagEvents = $state({
   exportError: "",
   lastExport: "",
 });
+
+/** 时间线筛选条件;跟着 tab 切换保留,所以放在 store 而不是组件里 */
+export const timeline = $state({
+  query: "",
+  kinds: [] as string[],
+  range: "all" as RangeKey,
+});
+
+/** 时间范围的中文标签,供组件渲染当前选择 */
+export function rangeLabel(range: RangeKey): string {
+  return RANGE_OPTIONS.find((o) => o.key === range)?.label ?? "全部";
+}
+
+export function toggleKindFilter(kind: string) {
+  timeline.kinds = toggleKind(timeline.kinds, kind);
+}
+
+export function clearFilter() {
+  timeline.query = "";
+  timeline.kinds = [];
+  timeline.range = "all";
+}
 
 let started = false;
 /** Tauri 事件监听的注销函数 */
