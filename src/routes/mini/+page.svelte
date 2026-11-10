@@ -8,6 +8,12 @@
     startMetrics,
     stopMetrics,
   } from "$lib/stores/metrics.svelte";
+  import { isDismissShortcut } from "$lib/shortcuts";
+
+  /** Esc 收起悬浮窗(和其他浮层一致) */
+  function onKeydown(e: KeyboardEvent) {
+    if (isDismissShortcut(e)) void invoke("hide_mini");
+  }
 
   onMount(() => {
     void startMetrics();
@@ -54,6 +60,8 @@
   const barColor = (pct: number) =>
     pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c";
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
