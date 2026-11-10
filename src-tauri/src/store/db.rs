@@ -118,6 +118,27 @@ impl Db {
             .map_err(|err| format!("统计事件条数失败: {err}"))
     }
 
+    /// 按 id 删除事件(用户手动清理),返回实际删除条数。
+    ///
+    /// 逐条删除而不是拼一个 IN (?1, ?2, …):调用方的条数很小,逐条能复用同一条
+    /// 语句缓存,也不用为了占位符数量拼 SQL 字符串。
+    pub fn delete_events(&self, ids: &[i64]) -> Result<usize, String> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock().unwrap();
+        let mut removed = 0;
+        for id in ids {
+            removed += conn
+                .execute(
+                    "DELETE FROM lag_events WHERE id = ?1",
+                    rusqlite::params![id],
+                )
+                .map_err(|err| format!("删除事件失败: {err}"))?;
+        }
+        Ok(removed)
+    }
+
     pub fn list_events(&self, limit: u32) -> Result<Vec<LagEvent>, String> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
@@ -418,6 +439,48 @@ mod tests {
                 "留下的必须是最新的"
             );
         }
+        cleanup(&p);
+    }
+
+    #[test]
+    fn delete_events_removes_only_the_given_ids() {
+        let p = temp_db_path();
+        let db = Db::open_with_retention(&p, T_RETAIN, 1000).unwrap();
+        insert_n(&db, 5, 1_700_000_000_000);
+        let rows = db.list_events(100).unwrap();
+        assert_eq!(rows.len(), 5);
+
+        // 删掉中间两条:剩下的应该是原 #1 #3 #5(按时间正序)
+        let victims = vec![rows[3].id.unwrap(), rows[1].id.unwrap()];
+        let removed = db.delete_events(&victims).expect("delete_events 必须成功");
+        assert_eq!(removed, 2, "返回的删除条数应等于实际命中条数");
+
+        let left = db.list_events(100).unwrap();
+        assert_eq!(left.len(), 3);
+        let ids: Vec<i64> = left.iter().map(|e| e.id.unwrap()).collect();
+        assert!(!ids.contains(&victims[0]), "被删的 id 不该再出现");
+        assert!(!ids.contains(&victims[1]), "被删的 id 不该再出现");
+
+        drop(db);
+        cleanup(&p);
+    }
+
+    #[test]
+    fn delete_events_ignores_unknown_ids() {
+        let p = temp_db_path();
+        let db = Db::open_with_retention(&p, T_RETAIN, 1000).unwrap();
+        insert_n(&db, 3, 1_700_000_000_000);
+
+        // 已经不存在的 id(重复删除 / 界面里的陈旧条目)不该报错,也不该删掉别的行
+        let removed = db.delete_events(&[999_999]).expect("未知 id 不该报错");
+        assert_eq!(removed, 0);
+        assert_eq!(db.count_events().unwrap(), 3);
+
+        // 空列表是合法的 no-op
+        assert_eq!(db.delete_events(&[]).unwrap(), 0);
+        assert_eq!(db.count_events().unwrap(), 3);
+
+        drop(db);
         cleanup(&p);
     }
 }
