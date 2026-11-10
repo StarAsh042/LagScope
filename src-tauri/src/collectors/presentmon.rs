@@ -19,7 +19,7 @@ const STUTTER_GAP_MS: f64 = 100.0;
 pub struct PresentMonWatch {
     latest: Arc<Mutex<Option<GameSample>>>,
     child: Arc<Mutex<Option<Child>>>,
-    /// PresentMon 是否成功跑起来(权限/会话冲突时为 false)
+    /// PresentMon 是否在使用中:置 true 于启动成功,置 false 于解析线程结束
     available: Arc<AtomicBool>,
 }
 
@@ -49,10 +49,26 @@ impl PresentMonWatch {
                 *watch.child.lock().unwrap() = Some(child);
 
                 let latest = watch.latest.clone();
-                thread::Builder::new()
+                let available = watch.available.clone();
+                let child_slot = watch.child.clone();
+                let spawned = thread::Builder::new()
                     .name("presentmon-reader".into())
-                    .spawn(move || parse_stream(stdout, latest))
-                    .ok();
+                    .spawn(move || {
+                        parse_stream(stdout, latest, available);
+                        // 收尾:回收子进程句柄,避免僵尸进程与句柄泄漏
+                        let mut slot = child_slot.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(mut c) = slot.take() {
+                            let _ = c.wait();
+                        }
+                    });
+                if spawned.is_err() {
+                    // 解析线程起不来 = 输出无人读取,等同于不可用
+                    watch.available.store(false, Ordering::Relaxed);
+                    if let Some(mut c) = watch.child.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                        let _ = c.kill();
+                        let _ = c.wait();
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("[presentmon] 启动失败: {e}");
@@ -66,8 +82,29 @@ impl PresentMonWatch {
         self.latest.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
+    /// PresentMon 是否在跑:启动成功且子进程仍存活。
+    ///
+    /// 子进程已退出时顺手复位标志并弃掉句柄,避免设置页长期误报「运行中」。
     pub fn is_available(&self) -> bool {
-        self.available.load(Ordering::Relaxed)
+        if !self.available.load(Ordering::Relaxed) {
+            return false;
+        }
+        let mut slot = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        match slot.as_mut() {
+            Some(child) => match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(_)) | Err(_) => {
+                    self.available.store(false, Ordering::Relaxed);
+                    slot.take();
+                    false
+                }
+            },
+            // 句柄已被解析线程收走 = 子进程输出流已结束
+            None => {
+                self.available.store(false, Ordering::Relaxed);
+                false
+            }
+        }
     }
 }
 
@@ -81,7 +118,11 @@ impl Drop for PresentMonWatch {
 }
 
 /// 逐行解析 CSV,按挂钟秒切换窗口聚合
-fn parse_stream<R: std::io::Read + Send + 'static>(stdout: R, latest: Arc<Mutex<Option<GameSample>>>) {
+fn parse_stream<R: std::io::Read + Send + 'static>(
+    stdout: R,
+    latest: Arc<Mutex<Option<GameSample>>>,
+    available: Arc<AtomicBool>,
+) {
     let reader = BufReader::new(stdout);
     // v1 CSV 列(部分):Application, ProcessID, ..., Dropped, ..., MsBetweenPresents, ...
     let mut col_app = None;
@@ -141,7 +182,10 @@ fn parse_stream<R: std::io::Read + Send + 'static>(stdout: R, latest: Arc<Mutex<
             agg.entry(pid).or_insert_with(|| (app, Vec::new())).1.push(gap);
         }
     }
-    // 流结束(PresentMon 退出):标记不可用由 available 读取方自行发现
+    // 流结束(PresentMon 退出):当前窗口不完整,不发布,直接作废并标记不可用
+    agg.clear();
+    *latest.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    available.store(false, Ordering::Relaxed);
 }
 
 fn flush_window(
@@ -178,4 +222,100 @@ fn unix_sec() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn watch_with(available: bool, child: Option<Child>) -> PresentMonWatch {
+        PresentMonWatch {
+            latest: Arc::new(Mutex::new(None)),
+            child: Arc::new(Mutex::new(child)),
+            available: Arc::new(AtomicBool::new(available)),
+        }
+    }
+
+    /// 回归:解析线程读到流结束必须复位 available,不能只留注释让读取方自觉。
+    #[test]
+    fn stream_end_clears_available() {
+        let available = Arc::new(AtomicBool::new(true));
+        let latest = Arc::new(Mutex::new(None));
+        // 只有表头、没有数据行,读完即结束
+        parse_stream(
+            Cursor::new(b"Application,ProcessID,Dropped,MsBetweenPresents\n".to_vec()),
+            latest.clone(),
+            available.clone(),
+        );
+        assert!(
+            !available.load(Ordering::Relaxed),
+            "流结束后 available 必须复位为 false"
+        );
+        assert!(latest.lock().unwrap().is_none(), "流结束应作废未完成的窗口");
+    }
+
+    /// 回归:解析线程把上一轮的残留快照清掉,避免前端继续展示已停止的帧数据。
+    #[test]
+    fn stream_end_drops_stale_sample() {
+        let available = Arc::new(AtomicBool::new(true));
+        let latest = Arc::new(Mutex::new(Some(GameSample {
+            ts_ms: 1_793_000_000_000,
+            app: "stale.exe".into(),
+            pid: 4242,
+            fps: 60,
+            avg_gap_ms: 16.7,
+            max_gap_ms: 20.0,
+            stutters: 0,
+        })));
+        parse_stream(Cursor::new(Vec::new()), latest.clone(), available.clone());
+        assert!(latest.lock().unwrap().is_none(), "残留快照必须清空");
+        assert!(!available.load(Ordering::Relaxed));
+    }
+
+    /// 回归:available 为 true 但子进程句柄已丢失(解析线程收走)= 不可用。
+    #[test]
+    fn is_available_false_without_child_handle() {
+        let w = watch_with(true, None);
+        assert!(!w.is_available(), "没有子进程句柄就不该报「运行中」");
+        assert!(
+            !w.available.load(Ordering::Relaxed),
+            "查询时应顺手把标志复位"
+        );
+    }
+
+    /// 子进程已退出时 is_available 必须返回 false 并复位标志、弃掉句柄。
+    #[test]
+    fn is_available_false_after_child_exit() {
+        let mut child = Command::new("cmd")
+            .args(["/c", "exit", "0"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn short-lived process");
+        let _ = child.wait(); // 确保它已经退出
+        let w = watch_with(true, Some(child));
+        assert!(!w.is_available(), "子进程已退出,不应再报「运行中」");
+        assert!(
+            w.child.lock().unwrap().is_none(),
+            "已退出的句柄应被丢弃"
+        );
+    }
+
+    /// 活着的子进程仍报可用(正向用例,防止把状态锁死成 false)。
+    #[test]
+    fn is_available_true_for_live_child() {
+        let child = Command::new("cmd")
+            .args(["/c", "ping -n 30 127.0.0.1 > nul"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn long-running process");
+        let w = watch_with(true, Some(child));
+        assert!(w.is_available(), "存活子进程应报可用");
+        // 收尾:kill 并把句柄 wait 掉,避免测试进程泄漏
+        if let Some(mut c) = w.child.lock().unwrap().take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+    }
 }
