@@ -252,7 +252,7 @@ impl LagDetector {
     /// 返回 Some(LagEvent) 表示触发卡顿事件
     pub fn feed(
         &mut self,
-        sample: MetricSample,
+        sample: &MetricSample,
         processes: &[ProcessInfo],
         hung_windows: &[String],
         game: Option<&GameSample>,
@@ -395,7 +395,7 @@ impl LagDetector {
         Some(LagEvent::build(
             sample.ts_ms,
             reasons,
-            sample,
+            sample.clone(),
             processes,
             self.hung_cache.clone(),
             game.cloned(),
@@ -432,7 +432,7 @@ mod tests {
         let mut fired = None;
         for i in 0..14u64 {
             let s = sample(base + i * 1000, 95.0);
-            if let Some(ev) = det.feed(s, &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(&s, &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -452,7 +452,7 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut first = None;
         for i in 0..14u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(&sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg) {
                 first = Some(ev);
                 break;
             }
@@ -460,7 +460,7 @@ mod tests {
         assert!(first.is_some());
         // 冷却期内继续满载,不应再触发
         for i in 14..40u64 {
-            let ev = det.feed(sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg);
+            let ev = det.feed(&sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg);
             assert!(ev.is_none(), "冷却期内不应重复触发: {ev:?}");
         }
     }
@@ -471,7 +471,7 @@ mod tests {
         let mut det = LagDetector::new();
         let base: u64 = 1_793_000_000_000;
         for i in 0..20u64 {
-            let ev = det.feed(sample(base + i * 1000, 45.0), &[], &[], None, None, &cfg);
+            let ev = det.feed(&sample(base + i * 1000, 45.0), &[], &[], None, None, &cfg);
             assert!(ev.is_none(), "中等负载不应触发: {ev:?}");
         }
     }
@@ -484,7 +484,7 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..20u64 {
-            if let Some(ev) = det.feed(sample(base + i * 1400, 95.0), &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(&sample(base + i * 1400, 95.0), &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -508,7 +508,7 @@ mod tests {
             ],
         };
         let ev = det
-            .feed(sample(base, 30.0), &[], &[], None, Some(&dpc), &cfg)
+            .feed(&sample(base, 30.0), &[], &[], None, Some(&dpc), &cfg)
             .expect("DPC 风暴应触发");
         let r = ev
             .reasons
@@ -532,7 +532,7 @@ mod tests {
             drivers: vec![("ntoskrnl.exe".into(), 1200)],
         };
         assert!(
-            det.feed(sample(base, 20.0), &[], &[], None, Some(&dpc), &cfg)
+            det.feed(&sample(base, 20.0), &[], &[], None, Some(&dpc), &cfg)
                 .is_none()
         );
     }
@@ -552,7 +552,7 @@ mod tests {
             stutters: 2,
         };
         let ev = det
-            .feed(sample(base, 30.0), &[], &[], Some(&game), None, &cfg)
+            .feed(&sample(base, 30.0), &[], &[], Some(&game), None, &cfg)
             .expect("帧间隔尖峰应触发");
         let r = ev
             .reasons
@@ -578,7 +578,7 @@ mod tests {
             max_gap_ms: 500.0,
             stutters: 1,
         };
-        assert!(det.feed(sample(base, 20.0), &[], &[], Some(&idle), None, &cfg).is_none());
+        assert!(det.feed(&sample(base, 20.0), &[], &[], Some(&idle), None, &cfg).is_none());
         // fps 高但间隔正常不触发
         let mut det2 = LagDetector::new();
         let smooth = GameSample {
@@ -592,7 +592,7 @@ mod tests {
         };
         assert!(
             det2
-                .feed(sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
+                .feed(&sample(base, 20.0), &[], &[], Some(&smooth), None, &cfg)
                 .is_none()
         );
     }
@@ -618,7 +618,7 @@ mod tests {
         let base: u64 = 1_793_000_000_000;
         let mut fired = None;
         for i in 0..8u64 {
-            if let Some(ev) = det.feed(page_sample(base + i * 1000, 900.0), &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(&page_sample(base + i * 1000, 900.0), &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -653,7 +653,7 @@ mod tests {
             let mut s = sample(base + i * 1000, 10.0);
             s.mem_commit_used = 21 * 1024 * 1024 * 1024; // 21/22 GiB ≈ 95%
             s.mem_commit_limit = 22 * 1024 * 1024 * 1024;
-            if let Some(ev) = det.feed(s, &[], &[], None, None, &cfg) {
+            if let Some(ev) = det.feed(&s, &[], &[], None, None, &cfg) {
                 fired = Some(ev);
                 break;
             }
@@ -689,7 +689,7 @@ mod tests {
         for i in 0..6u64 {
             let mut s = sample(base + i * 1000, 99.0);
             s.page_input_per_sec = 10.0;
-            if det.feed(s, &[], &[], None, None, &cfg).is_some() {
+            if det.feed(&s, &[], &[], None, None, &cfg).is_some() {
                 cpu_fired_early = true;
             }
         }
