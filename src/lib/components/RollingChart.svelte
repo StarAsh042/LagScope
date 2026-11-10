@@ -1,5 +1,6 @@
 <script lang="ts">
   // uPlot 滚动时间序列图:数据为 (tsMs, y1..yn) 元组数组
+  import { untrack } from "svelte";
   import uPlot from "uplot";
   import "uplot/dist/uPlot.min.css";
 
@@ -19,7 +20,10 @@
 
   let el: HTMLDivElement;
   let chart: uPlot | null = null;
-  let width = 300;
+  // 必须是响应式状态:ResizeObserver 回调里改它,若只是普通 let,
+  // 下面负责重建图表的 $effect 永远不会被重新触发,窗口拉伸后图表
+  // 会一直停在初始的 300px 宽度。
+  let width = $state(300);
 
   function timeAxisValues(
     _u: uPlot,
@@ -72,10 +76,13 @@
     };
   }
 
+  // 只在挂载时建一次图表,避免每次宽度变化都销毁重建(会丢动画与光标状态)。
+  // 用 untrack 读 data/配置:否则每秒一条新采样都会把建图表这段再跑一遍
+  // (虽然 chart 非空会提前返回,但白白唤醒一次 effect)。
   $effect(() => {
-    void width;
     if (!el || chart) return;
-    chart = new uPlot(opts(), data as unknown as uPlot.AlignedData, el);
+    const initial = untrack(() => ({ o: opts(), d: data as unknown as uPlot.AlignedData }));
+    chart = new uPlot(initial.o, initial.d, el);
     const ro = new ResizeObserver((entries) => {
       const w = Math.max(200, Math.floor(entries[0].contentRect.width));
       if (w !== width) width = w;
@@ -88,10 +95,16 @@
     };
   });
 
+  // 宽度变化:交给 uPlot 自己 resize,不重建实例
   $effect(() => {
-    void width;
-    if (chart && data.length)
+    if (chart && width > 0) chart.setSize({ width, height: 140 });
+  });
+
+  // 数据变化:复用同一实例做增量替换,取消不必要的全量重绘
+  $effect(() => {
+    if (chart && data.length) {
       chart.setData(data as unknown as uPlot.AlignedData);
+    }
   });
 </script>
 
