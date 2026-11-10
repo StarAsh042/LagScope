@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 新增事件导出：时间线右上角的 CSV / JSON 按钮可把最近事件导出到「下载/LagScope」，CSV 带 UTF-8 BOM 可直接用 Excel 打开，导出后自动在资源管理器中定位文件。
 - 新增设置项：硬缺页持续秒数、内存占用持续秒数、中断持续秒数、帧间隔尖峰毫秒、DPC 每秒阈值均可在设置页调整，不再写死在代码里。
+- 新增全局提示：组件渲染异常只影响出错的那一块并提供「重试 / 重新加载」，进程表与磁盘容量轮询失败也会在右下角提示，不再只写控制台。
 
 ### Changed
 

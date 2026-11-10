@@ -4,6 +4,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
+import { errorText } from "$lib/errors";
+import { notify } from "$lib/toast.svelte";
 import type { DiskInfo, GameSample, MetricSample, ProcessInfo } from "$lib/types";
 
 /** 历史窗口:120 秒(1Hz) */
@@ -70,7 +72,9 @@ export async function startMetrics() {
     try {
       metrics.processes = await invoke<ProcessInfo[]>("get_processes");
     } catch (err) {
+      // 进程表刷新失败会让界面长期停在旧数据上,必须让用户看见
       console.error("get_processes 失败", err);
+      notify("进程列表刷新失败: " + errorText(err), "warn");
     }
   };
   await pollProcesses();
@@ -82,6 +86,7 @@ export async function startMetrics() {
       metrics.disks = await invoke<DiskInfo[]>("get_disks");
     } catch (err) {
       console.error("get_disks 失败", err);
+      notify("磁盘容量读取失败: " + errorText(err), "warn");
     }
   };
   await pollDisks();
