@@ -9,3 +9,16 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 tmp/
+
+# TeamFlow 运行日志（插件自有产物，非交付物；host 提交时另有 pathspec 强制排除）
+logs/teamflow/
+
+# 宿主 panel 运行态、IDE 配置与编译/日志产物（非交付物）
+.dsh-ops/
+.vscode/
+.idea/
+*.log
+*.pdb
+
+# 流水线文档与任务夹产物（非交付物；PRD §9 pathspec 排除，本地保留）
+docs/
