@@ -219,8 +219,8 @@
 <style>
   .panel {
     flex: 1 0 480px;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 18px;
     overflow: auto;
@@ -233,8 +233,8 @@
     font-weight: 600;
   }
   .group {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 14px;
     display: flex;
@@ -245,7 +245,7 @@
   .gtitle {
     font-size: 12.5px;
     font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   label {
     display: flex;
@@ -260,16 +260,16 @@
   }
   input[type="number"] {
     width: 110px;
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 6px;
     padding: 5px 8px;
     font-size: 13px;
     outline: none;
   }
   input[type="number"]:focus {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .actions {
     display: flex;
@@ -277,39 +277,39 @@
     gap: 12px;
   }
   .save {
-    background: #3b6cd4;
+    background: var(--accent);
     border: none;
-    color: #fff;
+    color: var(--on-accent);
     border-radius: 8px;
     padding: 7px 22px;
     font-size: 13px;
     cursor: pointer;
   }
   .save:hover {
-    background: #4a7be0;
+    background: var(--accent-hover);
   }
   .save:disabled {
     opacity: 0.6;
     cursor: default;
   }
   .ok {
-    color: var(--ok, #3dd68c);
+    color: var(--ok);
     font-size: 12.5px;
   }
   .err {
-    color: var(--err, #e5484d);
+    color: var(--err);
     font-size: 12.5px;
   }
   .state-badge {
     margin-left: auto;
     font-size: 11px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .state-badge.on {
-    color: var(--ok, #3dd68c);
+    color: var(--ok);
   }
   .loading {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     font-size: 13px;
   }
 </style>

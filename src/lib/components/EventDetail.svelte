@@ -177,8 +177,8 @@
 <style>
   .detail {
     flex: 1;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px 14px;
     overflow: auto;
@@ -191,7 +191,7 @@
   .detail.empty {
     align-items: center;
     justify-content: center;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     font-size: 13px;
   }
   .head {
@@ -213,17 +213,17 @@
   }
   .ts {
     font-size: 12.5px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .ask {
     font-size: 12px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .err {
     font-size: 12px;
-    color: #e5484d;
-    background: #1d1113;
-    border: 1px solid #5a2126;
+    color: var(--err);
+    background: var(--err-bg);
+    border: 1px solid var(--err-border);
     border-radius: 6px;
     padding: 6px 9px;
   }
@@ -232,27 +232,27 @@
     font-size: 11.5px;
     padding: 2px 8px;
     border-radius: 5px;
-    border: 1px solid var(--border, #232a3a);
-    background: var(--bg, #0d1220);
-    color: var(--text-dim, #8b94a7);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
     cursor: pointer;
   }
   .act:hover:not(:disabled) {
-    border-color: #3b6cd4;
-    color: var(--text, #e8ecf4);
+    border-color: var(--accent);
+    color: var(--text);
   }
   .act:disabled {
     opacity: 0.45;
     cursor: default;
   }
   .act.danger {
-    border-color: #5a2126;
-    color: #e5484d;
+    border-color: var(--err-border);
+    color: var(--err);
   }
   .act.danger:hover:not(:disabled) {
-    background: #24100f;
-    border-color: #7a2c33;
-    color: #ff6b6b;
+    background: var(--err-bg-strong);
+    border-color: var(--err-border-strong);
+    color: var(--err-strong);
   }
   .reasons {
     display: flex;
@@ -260,9 +260,9 @@
     gap: 6px;
   }
   .reason {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    border-left: 3px solid #888;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--neutral);
     border-radius: 6px;
     padding: 7px 10px;
     display: flex;
@@ -276,16 +276,16 @@
   }
   .d {
     font-size: 13px;
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
   .counters {
     display: flex;
     flex-wrap: wrap;
     gap: 6px 16px;
     font-size: 12px;
-    color: var(--text-dim, #8b94a7);
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
+    color: var(--text-dim);
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
   }
@@ -295,15 +295,15 @@
     gap: 10px;
   }
   .section {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
   }
   .stitle {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     margin-bottom: 6px;
   }
   .line {
@@ -316,10 +316,10 @@
   .hung {
     font-size: 12.5px;
     padding: 2px 0;
-    color: #f5a623;
+    color: var(--warn);
   }
   .none {
     font-size: 12px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
 </style>

@@ -48,9 +48,9 @@
   .fallback {
     margin: 12px 0;
     padding: 14px 16px;
-    border: 1px solid #4a2529;
+    border: 1px solid var(--err-border-muted);
     border-radius: 10px;
-    background: #1b1315;
+    background: var(--err-bg-deep);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -58,11 +58,11 @@
   .title {
     font-size: 13px;
     font-weight: 600;
-    color: var(--err, #e5484d);
+    color: var(--err);
   }
   .detail {
     font-size: 12px;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     overflow-wrap: anywhere;
   }
   .acts {
@@ -73,20 +73,20 @@
     font-size: 12px;
     padding: 4px 12px;
     border-radius: 6px;
-    border: 1px solid #5a4a1f;
-    background: #241d0d;
-    color: #d3a94a;
+    border: 1px solid var(--warn-border-soft);
+    background: var(--warn-bg-soft);
+    color: var(--warn-strong);
     cursor: pointer;
   }
   button:hover {
-    background: #2d2410;
+    background: var(--warn-bg-hover);
   }
   button.ghost {
-    border-color: var(--border, #232a3a);
+    border-color: var(--border);
     background: transparent;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   button.ghost:hover {
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
 </style>

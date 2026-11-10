@@ -164,8 +164,8 @@
 <style>
   .panel {
     flex: 1 0 480px;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
+    background: var(--panel);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px 14px;
     display: flex;
@@ -183,27 +183,27 @@
   .stats {
     font-size: 12px;
     font-weight: 400;
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     display: flex;
     align-items: center;
     gap: 8px;
   }
   .refresh {
     background: transparent;
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text-dim, #8b94a7);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
     border-radius: 6px;
     font-size: 11.5px;
     padding: 3px 10px;
     cursor: pointer;
   }
   .refresh:hover {
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
   .search {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 6px;
     padding: 5px 10px;
     font-size: 12px;
@@ -211,18 +211,18 @@
     outline: none;
   }
   .search:focus {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .err {
-    color: var(--err, #e5484d);
+    color: var(--err);
     font-size: 12px;
   }
   .hint {
-    color: var(--warn, #f5a623);
+    color: var(--warn);
     margin-top: 2px;
   }
   .loading {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
     font-size: 12.5px;
     padding: 20px;
     text-align: center;
@@ -240,11 +240,11 @@
   th {
     position: sticky;
     top: 0;
-    background: var(--panel, #131926);
-    color: var(--text-dim, #8b94a7);
+    background: var(--panel);
+    color: var(--text-dim);
     text-align: left;
     padding: 6px 8px;
-    border-bottom: 1px solid var(--border, #232a3a);
+    border-bottom: 1px solid var(--border);
     font-weight: 500;
     white-space: nowrap;
     z-index: 1;
@@ -254,8 +254,8 @@
   }
   td {
     padding: 5px 8px;
-    border-bottom: 1px solid #1a2130;
-    color: var(--text, #e8ecf4);
+    border-bottom: 1px solid var(--panel-alt);
+    color: var(--text);
     white-space: nowrap;
   }
   td.num {
@@ -266,51 +266,51 @@
     max-width: 380px;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-dim, #b7c0d4);
+    color: var(--text-dim);
   }
   tr:hover td {
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   .dim {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .missing {
-    color: var(--err, #e5484d);
+    color: var(--err);
   }
   .badge.warn {
     display: inline-block;
-    background: #3a2b12;
-    color: var(--warn, #f5a623);
-    border: 1px solid #6b4d16;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
     border-radius: 4px;
     font-size: 10px;
     padding: 1px 5px;
     margin-left: 6px;
   }
   .state.on {
-    color: var(--ok, #3dd68c);
+    color: var(--ok);
   }
   .state.off {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .act {
     background: transparent;
-    border: 1px solid #2f4a8a;
-    color: #7fa3ee;
+    border: 1px solid var(--accent-border);
+    color: var(--accent-strong);
     border-radius: 5px;
     font-size: 11px;
     padding: 2px 10px;
     cursor: pointer;
   }
   .act:hover {
-    background: #16203a;
+    background: var(--accent-soft);
   }
   .act.admin {
-    border-color: #5a4a1f;
-    color: #d3a94a;
+    border-color: var(--warn-border-soft);
+    color: var(--warn-strong);
   }
   .act.admin:hover {
-    background: #241d0d;
+    background: var(--warn-bg-soft);
   }
   .act:disabled {
     opacity: 0.5;
@@ -318,8 +318,8 @@
   }
   .note {
     font-size: 11px;
-    color: var(--text-dim, #8b94a7);
-    border-top: 1px solid var(--border, #232a3a);
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
     padding-top: 6px;
   }
 </style>

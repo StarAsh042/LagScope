@@ -1,15 +1,81 @@
-/* LagScope 全局主题 */
+/* LagScope 主题令牌:组件里只引用变量,不再直接写十六进制。
+   命名约定 --x 是基础色,--x-soft/--x-hover/--x-bg/--x-border/--x-strong 是同一语义的分层。
+   canvas(uPlot 的轴、网格)与 SVG 属性拿不到 var(),走 src/lib/theme.ts 的 token() 读同一份值。 */
 :root {
+  /* 底层 */
   --bg: #0d1220;
   --panel: #131926;
+  --panel-alt: #1a2130;
   --border: #232a3a;
   --track: #232a3a;
+  --track-deep: #1d2434;
   --text: #e8ecf4;
   --text-dim: #8b94a7;
+  --placeholder: #5b6478;
+  --neutral: #888888;
+  --scroll-thumb: #2a3348;
+  --bg-glass: rgba(13, 18, 32, 0.92);
+
+  /* 主色 */
   --accent: #3b6cd4;
+  --accent-hover: #4a7be0;
+  --accent-soft: #16203a;
+  --accent-border: #2f4a8a;
+  --accent-strong: #7fa3ee;
+  --on-accent: #ffffff;
+
+  /* 语义色:正常 / 警告 / 错误各有底、边、字三层 */
   --ok: #3dd68c;
+  --ok-border: #1f4a33;
   --warn: #f5a623;
+  --warn-bg: #3a2b12;
+  --warn-bg-soft: #241d0d;
+  --warn-bg-hover: #2d2410;
+  --warn-border: #6b4d16;
+  --warn-border-soft: #5a4a1f;
+  --warn-strong: #d3a94a;
   --err: #e5484d;
+  --err-bg: #1d1113;
+  --err-bg-hover: #2a1a1d;
+  --err-border: #5a2126;
+  --err-border-strong: #7a2c33;
+  --err-border-soft: #593033;
+  --err-border-muted: #4a2529;
+  --err-strong: #ff6b6b;
+  --err-bg-strong: #24100f;
+  --err-bg-deep: #1b1315;
+
+  /* 图表画布:canvas 侧由 theme.ts 读取 */
+  --chart-axis: #5a647a;
+  --chart-grid: #1d2434;
+
+  /* 图表数据系列:同一屏内相邻曲线要能分辨,与状态色分开定义 */
+  --chart-cpu: #3b6cd4;
+  --chart-cpu-soft: #3b6cd466;
+  --chart-mem-used: #3dd68c;
+  --chart-mem-commit: #f5a623;
+  --chart-disk-read: #9a6cd4;
+  --chart-disk-write: #d46cb4;
+  --chart-disk-active: #f5a623;
+  --chart-net-rx: #3dd68c;
+  --chart-net-tx: #3b6cd4;
+  --chart-gpu-util: #f5a623;
+  --chart-gpu-mem: #8b94a7;
+  --chart-dpc: #e5484d;
+  --chart-page-fault: #f5a623;
+  --chart-fps: #3dd68c;
+  --chart-frame-gap: #e5484d;
+
+  /* 事件分类:时间线标签与详情左栏的分类色 */
+  --kind-cpu: #e5484d;
+  --kind-mem: #f5a623;
+  --kind-page-fault: #e28c3a;
+  --kind-disk: #d46cb4;
+  --kind-interrupt: #9a6cd4;
+  --kind-hung: #3b6cd4;
+  --kind-frame: #3dd68c;
+  --kind-dpc: #e28c3a;
+  --kind-manual: #8b94a7;
 }
 
 * {
@@ -38,7 +104,7 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a3348;
+  background: var(--scroll-thumb);
   border-radius: 5px;
 }
 ::-webkit-scrollbar-track {
