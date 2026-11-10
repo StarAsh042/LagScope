@@ -367,7 +367,7 @@
     flex-direction: column;
     height: 100vh;
     padding: 12px 16px;
-    gap: 12px;
+    gap: var(--space-12);
     /* 内容超高时可纵向滚动,避免底部被裁切 */
     overflow-y: auto;
   }
@@ -379,7 +379,7 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: var(--space-20);
   }
   h1 {
     font-size: 18px;
@@ -394,13 +394,13 @@
   }
   nav {
     display: flex;
-    gap: 6px;
+    gap: var(--space-6);
   }
   nav button {
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-dim);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 5px 14px;
     font-size: 13px;
     cursor: pointer;
@@ -420,20 +420,20 @@
     background: var(--err);
     color: var(--on-accent);
     font-size: 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 1px 6px;
     vertical-align: middle;
   }
   .right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-12);
   }
   .diag {
     background: var(--accent);
     border: none;
     color: var(--on-accent);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 6px 16px;
     font-size: 13px;
     cursor: pointer;
@@ -449,7 +449,7 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text-dim);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 5px 12px;
     font-size: 12.5px;
     cursor: pointer;
@@ -467,21 +467,21 @@
   }
   .events-view {
     display: flex;
-    gap: 12px;
+    gap: var(--space-12);
     /* 滚动容器内保证最小高度,内部各自滚动 */
     flex: 1 0 480px;
     min-height: 0;
   }
   .gauges {
     display: flex;
-    gap: 8px;
+    gap: var(--space-8);
     justify-content: space-around;
     flex-wrap: wrap;
   }
   .charts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 10px;
+    gap: var(--space-10);
   }
   footer {
     display: flex;
@@ -495,7 +495,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 6px;
+    gap: var(--space-6);
   }
   .stats .sep {
     opacity: 0.45;

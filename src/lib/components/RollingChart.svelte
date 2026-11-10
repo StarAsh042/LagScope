@@ -128,11 +128,11 @@
   .chart-card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 10px 12px 6px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-4);
     min-width: 0;
   }
   .title {

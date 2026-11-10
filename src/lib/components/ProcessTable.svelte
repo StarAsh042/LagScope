@@ -187,7 +187,7 @@
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -199,7 +199,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-12);
     margin-bottom: 8px;
   }
   .title {
@@ -211,7 +211,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 5px 10px;
     font-size: 12px;
     width: 220px;
@@ -279,7 +279,7 @@
     background: var(--warn-bg);
     color: var(--warn);
     border: 1px solid var(--warn-border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: 10px;
     padding: 1px 5px;
     margin-right: 6px;
@@ -289,7 +289,7 @@
     background: transparent;
     border: 1px solid var(--err-border-soft);
     color: var(--err);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     font-size: 11px;
     padding: 2px 8px;
     cursor: pointer;
@@ -315,7 +315,7 @@
   .confirm {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 16px 18px;
     width: 340px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -340,13 +340,13 @@
   .confirm-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--space-8);
   }
   .act {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     font-size: 12px;
     padding: 4px 14px;
     cursor: pointer;

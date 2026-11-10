@@ -96,7 +96,7 @@
     inset: 0;
     background: var(--bg-glass);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 8px 10px;
     display: flex;
     flex-direction: column;
@@ -122,7 +122,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-6);
   }
   .k {
     width: 30px;
@@ -134,13 +134,13 @@
     flex: 1;
     height: 6px;
     background: var(--track-deep);
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     overflow: hidden;
   }
   .fill {
     display: block;
     height: 100%;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     transition: width 0.4s ease;
   }
   .v {
