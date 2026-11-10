@@ -18,6 +18,8 @@
     unit?: string;
   } = $props();
 
+  const HEIGHT = 168;
+
   let el: HTMLDivElement;
   let chart: uPlot | null = null;
   // 必须是响应式状态:ResizeObserver 回调里改它,若只是普通 let,
@@ -58,9 +60,13 @@
     ];
     return {
       width,
-      height: 140,
-      legend: { show: true, live: false },
-      cursor: { show: false },
+      height: HEIGHT,
+      // live: true 才会随光标刷新图例里的数值(uPlot 默认给 .u-value 加了
+      // 仅 live 时可见的样式;false 时数值列会被 CSS 直接隐藏)。
+      legend: { show: true, live: true },
+      // show: true 才会绑定鼠标事件 —— 悬浮读数、拖拽框选缩放、
+      // 双击还原时间轴全部依赖它;关掉则一个事件都不注册。
+      cursor: { show: true, x: true, y: false },
       scales: yMax != null ? { y: { range: [0, yMax] } } : undefined,
       axes,
       series: [
@@ -97,13 +103,17 @@
 
   // 宽度变化:交给 uPlot 自己 resize,不重建实例
   $effect(() => {
-    if (chart && width > 0) chart.setSize({ width, height: 140 });
+    if (chart && width > 0) chart.setSize({ width, height: HEIGHT });
   });
 
-  // 数据变化:复用同一实例做增量替换,取消不必要的全量重绘
+  // 数据变化:每来一条新采样都要重绘,但不能把用户拖出来的时间范围顶掉。
+  // setData(data, false) 只换数据不动 x 轴,可是它同时会跳过内部的 commit(),
+  // 画面不会刷新,所以要再补一次 redraw(false) —— 那条路径只走 commit(),
+  // 不碰 setScale。
   $effect(() => {
     if (chart && data.length) {
-      chart.setData(data as unknown as uPlot.AlignedData);
+      chart.setData(data as unknown as uPlot.AlignedData, false);
+      chart.redraw(false);
     }
   });
 </script>
@@ -131,5 +141,37 @@
   }
   .plot {
     width: 100%;
+  }
+
+  /* uPlot 自带样式是按浅色主题写的,这里覆盖成深色面板上的观感 */
+  .plot :global(.u-legend) {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-dim, #8b94a7);
+    margin: 0;
+    text-align: left;
+  }
+  .plot :global(.u-legend .u-marker) {
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+  }
+  .plot :global(.u-legend .u-series > *) {
+    padding: 0 8px 0 0;
+  }
+  .plot :global(.u-legend .u-value) {
+    color: var(--text, #e8ecf4);
+    font-variant-numeric: tabular-nums;
+  }
+  .plot :global(.u-cursor-x) {
+    border-right: 1px dashed rgba(59, 108, 212, 0.85);
+  }
+  .plot :global(.u-select) {
+    background: rgba(59, 108, 212, 0.16);
+    border-left: 1px solid rgba(59, 108, 212, 0.5);
+    border-right: 1px solid rgba(59, 108, 212, 0.5);
+  }
+  .plot :global(.u-cursor-pt) {
+    border-width: 0;
   }
 </style>
