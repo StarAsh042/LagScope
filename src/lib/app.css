@@ -125,6 +125,13 @@ body {
   background: var(--scroll-thumb);
   border-radius: var(--radius-md);
 }
+/* 键盘焦点:统一 2px 主色环。组件里不要再写 outline: none,
+   那会让键盘用户完全失去位置感;需要弱化时用 outline-offset 收紧,而不是删掉。 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }

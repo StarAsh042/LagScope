@@ -266,7 +266,6 @@
     border-radius: var(--radius-lg);
     padding: 5px 8px;
     font-size: 13px;
-    outline: none;
   }
   input[type="number"]:focus {
     border-color: var(--accent);
