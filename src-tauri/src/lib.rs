@@ -141,6 +141,7 @@ pub fn run() {
             commands::get_disks,
             commands::kill_process,
             commands::list_lag_events,
+            commands::delete_lag_events,
             commands::export_lag_events,
             commands::diagnose_now,
             commands::toggle_mini,

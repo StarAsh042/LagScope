@@ -21,6 +21,8 @@ export const lagEvents = $state({
   exportNote: "",
   exportError: "",
   lastExport: "",
+  /** 正在删除的事件 id,用于禁用按钮 */
+  deleting: null as number | null,
 });
 
 let started = false;
@@ -90,6 +92,30 @@ export async function exportEvents(format: "csv" | "json", reveal = true) {
     lagEvents.exportError = String(err);
   } finally {
     lagEvents.exporting = false;
+  }
+}
+
+/** 删除一条已入库的事件;未入库的实时事件(id <= 0)不处理 */
+export async function deleteEvent(ev: LagEvent): Promise<boolean> {
+  const id = ev.id;
+  if (id == null || id <= 0) {
+    lagEvents.loadError = "这条事件还没有入库,无法删除";
+    return false;
+  }
+  lagEvents.deleting = id;
+  lagEvents.loadError = "";
+  try {
+    await invoke<number>("delete_lag_events", { ids: [id] });
+    lagEvents.list = lagEvents.list.filter((x) => x.id !== id);
+    if (lagEvents.selected?.id === id) {
+      lagEvents.selected = lagEvents.list[0] ?? null;
+    }
+    return true;
+  } catch (err) {
+    lagEvents.loadError = String(err);
+    return false;
+  } finally {
+    lagEvents.deleting = null;
   }
 }
 

@@ -190,6 +190,18 @@ pub fn list_lag_events(
     state.db.list_events(limit.unwrap_or(100))
 }
 
+/// 删除指定的卡顿事件(用户手动清理),返回实际删除条数
+///
+/// 不校验 id 是否存在:界面上的列表可能比库里旧(事件已被保留策略裁掉),
+/// 重复删除或删到不存在的 id 一律按 0 条处理,不报错。
+#[tauri::command]
+pub fn delete_lag_events(
+    state: State<'_, std::sync::Arc<AppState>>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    state.db.delete_events(&ids)
+}
+
 /// 导出结果:落盘路径 + 条数,前端据此提示并「在文件夹中显示」
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

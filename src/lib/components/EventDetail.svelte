@@ -1,9 +1,32 @@
 <script lang="ts">
-  import { fmtTs, kindMeta, lagEvents } from "$lib/stores/lagEvents.svelte";
+  import {
+    deleteEvent,
+    fmtTs,
+    kindMeta,
+    lagEvents,
+  } from "$lib/stores/lagEvents.svelte";
   import { fmtBytes, fmtBytesPerSec } from "$lib/stores/metrics.svelte";
   import type { LagEvent, TopProc } from "$lib/types";
 
   const ev = $derived(lagEvents.selected);
+
+  /** 只有已入库的记录才删得掉;实时推送里 id 为负的旧式事件没有库行可删 */
+  const deletable = $derived(ev != null && ev.id != null && ev.id > 0);
+  const deleting = $derived(ev?.id != null && lagEvents.deleting === ev.id);
+
+  let confirming = $state(false);
+
+  // 换一条事件就把确认态收掉,避免确认框跟着跑到另一条记录上
+  $effect(() => {
+    void ev?.id;
+    void ev?.tsMs;
+    confirming = false;
+  });
+
+  async function confirmDelete() {
+    if (ev == null) return;
+    if (await deleteEvent(ev)) confirming = false;
+  }
 
   function topList(list: TopProc[], unit: (v: number) => string) {
     return list.map(
@@ -16,8 +39,38 @@
   <div class="detail">
     <div class="head">
       <span class="title">事件详情 {ev.id != null && ev.id > 0 ? `#${ev.id}` : ""}</span>
-      <span class="ts">{fmtTs(ev.tsMs)}</span>
+      <span class="head-right">
+        <span class="ts">{fmtTs(ev.tsMs)}</span>
+        {#if confirming}
+          <span class="ask">删除这条记录?</span>
+          <button class="act danger" onclick={confirmDelete} disabled={deleting}>
+            {deleting ? "删除中…" : "删除"}
+          </button>
+          <button
+            class="act"
+            onclick={() => (confirming = false)}
+            disabled={deleting}
+          >
+            取消
+          </button>
+        {:else}
+          <button
+            class="act"
+            onclick={() => (confirming = true)}
+            disabled={!deletable}
+            title={deletable
+              ? "从事件库中删除这条记录"
+              : "这条事件没有入库记录,无法删除"}
+          >
+            删除
+          </button>
+        {/if}
+      </span>
     </div>
+
+    {#if lagEvents.loadError}
+      <div class="err">{lagEvents.loadError}</div>
+    {/if}
 
     <div class="reasons">
       {#each ev.reasons as r (r.kind + r.value)}
@@ -145,14 +198,61 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    gap: 8px;
   }
   .title {
     font-size: 14px;
     font-weight: 600;
   }
+  .head-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .ts {
     font-size: 12.5px;
     color: var(--text-dim, #8b94a7);
+  }
+  .ask {
+    font-size: 12px;
+    color: var(--text-dim, #8b94a7);
+  }
+  .err {
+    font-size: 12px;
+    color: #e5484d;
+    background: #1d1113;
+    border: 1px solid #5a2126;
+    border-radius: 6px;
+    padding: 6px 9px;
+  }
+  .act {
+    font-family: inherit;
+    font-size: 11.5px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border, #232a3a);
+    background: var(--bg, #0d1220);
+    color: var(--text-dim, #8b94a7);
+    cursor: pointer;
+  }
+  .act:hover:not(:disabled) {
+    border-color: #3b6cd4;
+    color: var(--text, #e8ecf4);
+  }
+  .act:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .act.danger {
+    border-color: #5a2126;
+    color: #e5484d;
+  }
+  .act.danger:hover:not(:disabled) {
+    background: #24100f;
+    border-color: #7a2c33;
+    color: #ff6b6b;
   }
   .reasons {
     display: flex;
