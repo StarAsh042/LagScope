@@ -51,7 +51,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-4);
     /* 固定宽度:副标题文字变化时不会引起整排表盘左右抖动 */
     width: 118px;
     flex: none;

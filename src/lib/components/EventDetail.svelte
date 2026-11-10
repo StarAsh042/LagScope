@@ -179,12 +179,12 @@
     flex: 1;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 12px 14px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-12);
     min-width: 0;
     min-height: 0;
   }
@@ -198,7 +198,7 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 8px;
+    gap: var(--space-8);
   }
   .title {
     font-size: 14px;
@@ -207,7 +207,7 @@
   .head-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-6);
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -224,14 +224,14 @@
     color: var(--err);
     background: var(--err-bg);
     border: 1px solid var(--err-border);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 6px 9px;
   }
   .act {
     font-family: inherit;
     font-size: 11.5px;
     padding: 2px 8px;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text-dim);
@@ -257,16 +257,16 @@
   .reasons {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-6);
   }
   .reason {
     background: var(--bg);
     border: 1px solid var(--border);
     border-left: 3px solid var(--neutral);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 7px 10px;
     display: flex;
-    gap: 10px;
+    gap: var(--space-10);
     align-items: baseline;
   }
   .kind {
@@ -281,23 +281,23 @@
   .counters {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 16px;
+    gap: var(--space-6) var(--space-16);
     font-size: 12px;
     color: var(--text-dim);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 8px 10px;
   }
   .tops {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
+    gap: var(--space-10);
   }
   .section {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 8px 10px;
   }
   .stitle {

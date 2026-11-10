@@ -221,12 +221,12 @@
     flex: 1 0 480px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 14px 18px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--space-14);
   }
   .head {
     font-size: 14px;
@@ -235,11 +235,11 @@
   .group {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 10px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
     max-width: 520px;
   }
   .gtitle {
@@ -255,7 +255,7 @@
   }
   label.check {
     justify-content: flex-start;
-    gap: 10px;
+    gap: var(--space-10);
     cursor: pointer;
   }
   input[type="number"] {
@@ -263,7 +263,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 5px 8px;
     font-size: 13px;
     outline: none;
@@ -274,13 +274,13 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-12);
   }
   .save {
     background: var(--accent);
     border: none;
     color: var(--on-accent);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 7px 22px;
     font-size: 13px;
     cursor: pointer;

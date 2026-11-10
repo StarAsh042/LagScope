@@ -16,6 +16,24 @@
   --scroll-thumb: #2a3348;
   --bg-glass: rgba(13, 18, 32, 0.92);
 
+  /* 圆角刻度:小标签用 xs/sm,控件用 md,卡片用 lg/xl,面板用 2xl */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+
+  /* 间距刻度:4 的倍数,1/2/3px 这类视觉微调不进刻度 */
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+
   /* 主色 */
   --accent: #3b6cd4;
   --accent-hover: #4a7be0;
@@ -105,7 +123,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
 }
 ::-webkit-scrollbar-track {
   background: transparent;

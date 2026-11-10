@@ -49,11 +49,11 @@
     margin: 12px 0;
     padding: 14px 16px;
     border: 1px solid var(--err-border-muted);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     background: var(--err-bg-deep);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
   }
   .title {
     font-size: 13px;
@@ -67,12 +67,12 @@
   }
   .acts {
     display: flex;
-    gap: 8px;
+    gap: var(--space-8);
   }
   button {
     font-size: 12px;
     padding: 4px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--warn-border-soft);
     background: var(--warn-bg-soft);
     color: var(--warn-strong);

@@ -25,16 +25,16 @@
     z-index: 60;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
     max-width: 420px;
     pointer-events: none;
   }
   .toast {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-8);
     padding: 9px 10px 9px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
     background: var(--panel);

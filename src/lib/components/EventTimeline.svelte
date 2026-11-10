@@ -187,7 +187,7 @@
   .timeline {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-2xl);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -198,7 +198,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-8);
     font-size: 13px;
     font-weight: 600;
     color: var(--text-dim);
@@ -206,13 +206,13 @@
   }
   .tools {
     display: flex;
-    gap: 4px;
+    gap: var(--space-4);
   }
   .mini {
     font-size: 11px;
     font-weight: 600;
     padding: 2px 7px;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text-dim);
@@ -230,7 +230,7 @@
   .filters {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-6);
     margin-bottom: 8px;
   }
   .search {
@@ -243,7 +243,7 @@
     font: inherit;
     font-size: 12px;
     padding: 5px 22px 5px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
@@ -278,14 +278,14 @@
   .kinds {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-4);
     align-items: center;
   }
   .chip {
     font-size: 11px;
     font-family: inherit;
     padding: 2px 7px;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text-dim);
@@ -317,7 +317,7 @@
     color: var(--text-dim);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     padding: 6px 8px;
     margin-bottom: 8px;
     word-break: break-all;
@@ -357,12 +357,12 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
   }
   .item {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 8px 10px;
     cursor: pointer;
     text-align: left;
@@ -390,19 +390,19 @@
     font-size: 10px;
     background: var(--err);
     color: var(--on-accent);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: 1px 5px;
   }
   .row2 {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-4);
     margin-top: 5px;
   }
   .tag {
     font-size: 10.5px;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: 1px 6px;
   }
   .row3 {
