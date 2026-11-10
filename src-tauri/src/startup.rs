@@ -233,7 +233,9 @@ pub fn list_startup() -> Vec<StartupItem> {
 }
 
 /// 禁用/启用注册表启动项(写/删 StartupApproved,与任务管理器同机制)。
-/// HKLM 系统项在无管理员权限时返回带说明的错误。
+///
+/// 系统级(HKLM / HKLM WOW64)项目写 StartupApproved 需要管理员权限,
+/// 无权限时返回带 `需要管理员` 字样的错误,前端据此提示"以管理员身份重启"。
 pub fn set_startup_enabled_impl(
     source: StartupSource,
     name: &str,
@@ -247,7 +249,7 @@ pub fn set_startup_enabled_impl(
     let approved = hk
         .open_subkey_with_flags(approved_subkey, KEY_SET_VALUE)
         .or_else(|_| hk.create_subkey(approved_subkey).map(|(k, _)| k))
-        .map_err(|e| format!("打开 {label} 的 StartupApproved 失败: {e}(系统项需管理员权限)"))?;
+        .map_err(|e| format!("打开 {label} 的 StartupApproved 失败: {e}(需要管理员权限)"))?;
 
     if enabled {
         match approved.delete_value(name) {

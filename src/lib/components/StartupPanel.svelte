@@ -11,6 +11,23 @@
   let busy = $state("");
   let search = $state("");
 
+  /** 同一名字可能同时存在于 HKCU 与 HKLM,忙碌标记必须带上来源 */
+  const key = (it: StartupItem) => it.source + "\u0000" + it.name;
+
+  /** 系统级项目写 StartupApproved 需要管理员权限 */
+  const needsAdmin = (it: StartupItem) =>
+    it.source === "machineRun" || it.source === "machineRunWow";
+
+  /** 启动文件夹项目没有启用/禁用开关,只能删快捷方式 */
+  const isFolder = (it: StartupItem) =>
+    it.source === "userFolder" || it.source === "commonFolder";
+
+  const adminHint = $derived(
+    errMsg.includes("需要管理员权限")
+      ? "关闭 LagScope,右键「以管理员身份运行」后再试。"
+      : ""
+  );
+
   async function load() {
     loading = true;
     errMsg = "";
@@ -48,7 +65,7 @@
   }
 
   async function toggle(item: StartupItem) {
-    busy = item.name;
+    busy = key(item);
     errMsg = "";
     try {
       await invoke("set_startup_enabled", {
@@ -75,7 +92,10 @@
   </div>
   <input class="search" type="search" placeholder="搜索名称或命令…" bind:value={search} />
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <div class="err">
+      {errMsg}
+      {#if adminHint}<div class="hint">{adminHint}</div>{/if}
+    </div>
   {/if}
   {#if loading}
     <div class="loading">扫描中…</div>
@@ -115,16 +135,18 @@
                 {/if}
               </td>
               <td>
-                {#if it.source === "userRun"}
+                {#if isFolder(it)}
+                  <span class="dim" title={it.advice}>{it.advice || "—"}</span>
+                {:else}
                   <button
                     class="act"
-                    disabled={busy === it.name}
+                    class:admin={needsAdmin(it)}
+                    disabled={busy === key(it)}
+                    title={needsAdmin(it) ? "系统级项目,修改需要管理员权限" : undefined}
                     onclick={() => toggle(it)}
                   >
-                    {busy === it.name ? "…" : it.enabled ? "禁用" : "启用"}
+                    {busy === key(it) ? "…" : it.enabled ? "禁用" : "启用"}
                   </button>
-                {:else}
-                  <span class="dim" title={it.advice}>{it.advice || "—"}</span>
                 {/if}
               </td>
             </tr>
@@ -134,8 +156,8 @@
     </div>
   {/if}
   <div class="note">
-    禁用/启用通过 Explorer StartupApproved 键实现,与任务管理器"启动应用"一致;
-    系统级(HKLM)项目修改需要管理员权限。
+    禁用/启用通过 Explorer StartupApproved 键实现,与任务管理器"启动应用"一致。
+    系统级(HKLM)项目需要以管理员身份运行本程序才能修改;启动文件夹项目请删除对应快捷方式。
   </div>
 </div>
 
@@ -194,6 +216,10 @@
   .err {
     color: var(--err, #e5484d);
     font-size: 12px;
+  }
+  .hint {
+    color: var(--warn, #f5a623);
+    margin-top: 2px;
   }
   .loading {
     color: var(--text-dim, #8b94a7);
@@ -278,6 +304,13 @@
   }
   .act:hover {
     background: #16203a;
+  }
+  .act.admin {
+    border-color: #5a4a1f;
+    color: #d3a94a;
+  }
+  .act.admin:hover {
+    background: #241d0d;
   }
   .act:disabled {
     opacity: 0.5;
