@@ -85,7 +85,7 @@ pub fn run() {
 
             // 帧监测(PresentMon):按设置启动
             if settings.enable_frame_monitor {
-                commands::set_frame_monitor(app.handle(), &state, true);
+                commands::set_frame_monitor(app.handle(), &state, true, settings.stutter_gap_ms);
             }
             // ETW DPC 归因:按设置启动(非管理员自动降级)
             if settings.enable_dpc_watch {
