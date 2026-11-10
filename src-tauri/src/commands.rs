@@ -40,17 +40,26 @@ pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> Monitor
 }
 
 /// 启动/停止 PresentMon 帧监测(设置开关与启动流程共用)
-pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enable: bool) {
+///
+/// `stutter_gap_ms` 是帧间隔尖峰阈值,从设置透传给解析线程。
+pub fn set_frame_monitor(
+    app: &AppHandle,
+    state: &std::sync::Arc<AppState>,
+    enable: bool,
+    stutter_gap_ms: f64,
+) {
     let mut fm = state.frame_monitor.lock().unwrap();
     if enable {
-        if fm.is_none() {
-            match app.path().resolve("extras/PresentMon.exe", BaseDirectory::Resource) {
+        match fm.as_ref() {
+            // 已在运行:只热更新阈值,不重启子进程
+            Some(watch) => watch.set_stutter_gap_ms(stutter_gap_ms),
+            None => match app.path().resolve("extras/PresentMon.exe", BaseDirectory::Resource) {
                 Ok(p) if p.exists() => {
-                    *fm = Some(PresentMonWatch::start(&p));
+                    *fm = Some(PresentMonWatch::start(&p, stutter_gap_ms));
                 }
                 Ok(p) => eprintln!("[presentmon] 未找到 PresentMon.exe: {}", p.display()),
                 Err(e) => eprintln!("[presentmon] 解析资源路径失败: {e}"),
-            }
+            },
         }
     } else {
         // Drop 会终止子进程

@@ -22,6 +22,9 @@
     diskTransferMs: number;
     diskSustainS: number;
     interruptPct: number;
+    interruptSustainS: number;
+    stutterGapMs: number;
+    dpcTotalThreshold: number;
     cooldownS: number;
     closeToTray: boolean;
     autostart: boolean;
@@ -112,6 +115,24 @@
       <label>
         <span>中断时间阈值 %</span>
         <input type="number" min="5" max="90" bind:value={s.interruptPct} />
+      </label>
+      <label>
+        <span>中断持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.interruptSustainS} />
+      </label>
+      <label>
+        <span>帧间隔尖峰 ms</span>
+        <input type="number" min="20" max="1000" bind:value={s.stutterGapMs} />
+      </label>
+      <label>
+        <span>DPC 每秒阈值</span>
+        <input
+          type="number"
+          min="1000"
+          max="100000"
+          step="500"
+          bind:value={s.dpcTotalThreshold}
+        />
       </label>
       <label>
         <span>同类事件冷却 秒</span>

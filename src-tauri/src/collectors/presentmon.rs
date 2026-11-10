@@ -6,14 +6,12 @@
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::engine::GameSample;
-
-const STUTTER_GAP_MS: f64 = 100.0;
+use crate::engine::{DetectorConfig, GameSample};
 
 /// 每秒帧统计缓存 + 子进程句柄
 pub struct PresentMonWatch {
@@ -21,15 +19,30 @@ pub struct PresentMonWatch {
     child: Arc<Mutex<Option<Child>>>,
     /// PresentMon 是否在使用中:置 true 于启动成功,置 false 于解析线程结束
     available: Arc<AtomicBool>,
+    /// 帧间隔尖峰阈值(ms):来自设置,与检测器判帧卡顿共用同一份数值。
+    /// 用 f64 位模式存进原子量,运行中改设置不必重启 PresentMon。
+    stutter_gap_ms: Arc<AtomicU64>,
+}
+
+/// 非法阈值(0/负数/NaN)一律回落到检测器默认值,避免把每一帧都算成卡帧。
+fn sanitize_gap(v: f64) -> f64 {
+    if v.is_finite() && v > 0.0 {
+        v
+    } else {
+        DetectorConfig::default().stutter_gap_ms
+    }
 }
 
 impl PresentMonWatch {
     /// 启动 PresentMon 子进程与 stdout 解析线程
-    pub fn start(exe_path: &std::path::Path) -> Self {
+    ///
+    /// `stutter_gap_ms` 由设置传入:帧间隔超过它的帧记为一次卡帧。
+    pub fn start(exe_path: &std::path::Path, stutter_gap_ms: f64) -> Self {
         let watch = Self {
             latest: Arc::new(Mutex::new(None)),
             child: Arc::new(Mutex::new(None)),
             available: Arc::new(AtomicBool::new(false)),
+            stutter_gap_ms: Arc::new(AtomicU64::new(sanitize_gap(stutter_gap_ms).to_bits())),
         };
 
         match Command::new(exe_path)
@@ -51,10 +64,11 @@ impl PresentMonWatch {
                 let latest = watch.latest.clone();
                 let available = watch.available.clone();
                 let child_slot = watch.child.clone();
+                let gap_threshold = watch.stutter_gap_ms.clone();
                 let spawned = thread::Builder::new()
                     .name("presentmon-reader".into())
                     .spawn(move || {
-                        parse_stream(stdout, latest, available);
+                        parse_stream(stdout, latest, available, gap_threshold);
                         // 收尾:回收子进程句柄,避免僵尸进程与句柄泄漏
                         let mut slot = child_slot.lock().unwrap_or_else(|e| e.into_inner());
                         if let Some(mut c) = slot.take() {
@@ -75,6 +89,12 @@ impl PresentMonWatch {
             }
         }
         watch
+    }
+
+    /// 运行中改阈值:下一个统计窗口即生效,不必重启 PresentMon 子进程。
+    pub fn set_stutter_gap_ms(&self, v: f64) {
+        self.stutter_gap_ms
+            .store(sanitize_gap(v).to_bits(), Ordering::Relaxed);
     }
 
     /// 最近一秒的帧统计(无渲染活动或未启动时为 None)
@@ -122,6 +142,7 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
     stdout: R,
     latest: Arc<Mutex<Option<GameSample>>>,
     available: Arc<AtomicBool>,
+    stutter_gap_ms: Arc<AtomicU64>,
 ) {
     let reader = BufReader::new(stdout);
     // v1 CSV 列(部分):Application, ProcessID, ..., Dropped, ..., MsBetweenPresents, ...
@@ -173,7 +194,9 @@ fn parse_stream<R: std::io::Read + Send + 'static>(
 
         let sec = unix_sec();
         if sec != cur_sec {
-            flush_window(&mut agg, cur_sec, &latest);
+            // 每切一个窗口重新读一次阈值,让设置页的改动实时生效
+            let threshold = f64::from_bits(stutter_gap_ms.load(Ordering::Relaxed));
+            flush_window(&mut agg, cur_sec, &latest, threshold);
             agg.clear();
             cur_sec = sec;
         }
@@ -192,6 +215,7 @@ fn flush_window(
     agg: &mut std::collections::HashMap<u32, (String, Vec<f64>)>,
     sec: u64,
     latest: &Arc<Mutex<Option<GameSample>>>,
+    stutter_gap_ms: f64,
 ) {
     // 选本秒帧数最多的进程(渲染大户)
     let best = agg
@@ -204,7 +228,7 @@ fn flush_window(
     }
     let max_gap = gaps.iter().cloned().fold(0.0_f64, f64::max);
     let avg_gap = gaps.iter().sum::<f64>() / gaps.len() as f64;
-    let stutters = gaps.iter().filter(|g| **g >= STUTTER_GAP_MS).count() as u32;
+    let stutters = gaps.iter().filter(|g| **g >= stutter_gap_ms).count() as u32;
     let sample = GameSample {
         ts_ms: sec * 1000,
         app,
@@ -233,6 +257,7 @@ mod tests {
             latest: Arc::new(Mutex::new(None)),
             child: Arc::new(Mutex::new(child)),
             available: Arc::new(AtomicBool::new(available)),
+            stutter_gap_ms: Arc::new(AtomicU64::new(100.0_f64.to_bits())),
         }
     }
 
@@ -246,6 +271,7 @@ mod tests {
             Cursor::new(b"Application,ProcessID,Dropped,MsBetweenPresents\n".to_vec()),
             latest.clone(),
             available.clone(),
+            Arc::new(AtomicU64::new(100.0_f64.to_bits())),
         );
         assert!(
             !available.load(Ordering::Relaxed),
@@ -267,9 +293,64 @@ mod tests {
             max_gap_ms: 20.0,
             stutters: 0,
         })));
-        parse_stream(Cursor::new(Vec::new()), latest.clone(), available.clone());
+        parse_stream(
+            Cursor::new(Vec::new()),
+            latest.clone(),
+            available.clone(),
+            Arc::new(AtomicU64::new(100.0_f64.to_bits())),
+        );
         assert!(latest.lock().unwrap().is_none(), "残留快照必须清空");
         assert!(!available.load(Ordering::Relaxed));
+    }
+
+    /// 回归:卡帧阈值必须真的用传入值,而不是模块里写死 100ms。
+    /// 同一份帧间隔下,100ms 阈值记 0 次卡帧,20ms 阈值记 3 次。
+    #[test]
+    fn stutter_threshold_comes_from_argument() {
+        let count_with = |threshold: f64| -> u32 {
+            let latest = Arc::new(Mutex::new(None));
+            // 直接调 flush_window:构造单秒窗口,避开挂钟翻秒带来的不确定性
+            let mut agg = std::collections::HashMap::new();
+            agg.insert(
+                100u32,
+                (
+                    "game.exe".to_string(),
+                    vec![10.0_f64, 12.0, 30.0, 40.0, 50.0],
+                ),
+            );
+            flush_window(&mut agg, 1_793_000_000, &latest, threshold);
+            latest.lock().unwrap().take().map(|s| s.stutters).unwrap_or(0)
+        };
+        assert_eq!(count_with(100.0), 0, "阈值 100ms 时无卡帧");
+        assert_eq!(count_with(20.0), 3, "阈值 20ms 时应记到 30/40/50 三次");
+    }
+
+    /// 运行中改阈值必须落到解析线程读的那个原子量上(设置页保存后不重启子进程)。
+    #[test]
+    fn set_stutter_gap_ms_is_visible_to_reader() {
+        let w = watch_with(false, None);
+        // 解析线程持有的是同一个 Arc,克隆后读到的新值必须一致
+        let reader_view = w.stutter_gap_ms.clone();
+        assert_eq!(f64::from_bits(reader_view.load(Ordering::Relaxed)), 100.0);
+        w.set_stutter_gap_ms(33.5);
+        assert_eq!(f64::from_bits(reader_view.load(Ordering::Relaxed)), 33.5,
+            "解析线程侧的句柄必须看到热更新后的阈值");
+        // 非法值不能写进解析线程
+        w.set_stutter_gap_ms(0.0);
+        assert_eq!(
+            f64::from_bits(reader_view.load(Ordering::Relaxed)),
+            DetectorConfig::default().stutter_gap_ms
+        );
+    }
+
+    /// 0/负数/NaN 不能让「帧间隔 >= 阈值」恒真,必须回落默认值。
+    #[test]
+    fn sanitize_gap_falls_back_to_default() {
+        let d = DetectorConfig::default().stutter_gap_ms;
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(sanitize_gap(bad), d, "非法阈值 {bad} 应回落默认");
+        }
+        assert_eq!(sanitize_gap(42.0), 42.0, "合法阈值原样保留");
     }
 
     /// 回归:available 为 true 但子进程句柄已丢失(解析线程收走)= 不可用。
