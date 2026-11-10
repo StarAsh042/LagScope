@@ -12,21 +12,31 @@ export const lagEvents = $state({
 });
 
 let started = false;
+/** Tauri 事件监听的注销函数 */
+const unlisteners: (() => void)[] = [];
 
 export async function startLagEvents() {
   if (started) return;
   started = true;
 
-  await listen<LagEvent>("lag:event", (e) => {
+  unlisteners.push(await listen<LagEvent>("lag:event", (e) => {
     const ev = e.payload;
     ev.id = ev.id ?? -1;
     // 实时事件置顶;选中态保持
     lagEvents.list.unshift(ev);
     if (lagEvents.list.length > 200) lagEvents.list.length = 200;
     if (!lagEvents.selected) lagEvents.selected = ev;
-  });
+  }));
 
   await refresh();
+}
+
+/** 撤掉事件监听,允许重新 start(路由切换时调用) */
+export function stopLagEvents() {
+  while (unlisteners.length) {
+    unlisteners.pop()!();
+  }
+  started = false;
 }
 
 export async function refresh() {

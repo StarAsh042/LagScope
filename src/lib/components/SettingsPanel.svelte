@@ -37,12 +37,10 @@
   let saved = $state(false);
   let errMsg = $state("");
 
-  onMount(async () => {
-    try {
-      s = await invoke<Settings>("get_settings");
-    } catch (e) {
-      errMsg = String(e);
-    }
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let savedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  onMount(() => {
     // 轮询监测器实际运行状态(5s)
     const poll = async () => {
       try {
@@ -51,8 +49,30 @@
         /* 忽略瞬时失败 */
       }
     };
-    await poll();
-    setInterval(poll, 5000);
+
+    void (async () => {
+      try {
+        s = await invoke<Settings>("get_settings");
+      } catch (e) {
+        errMsg = String(e);
+      }
+      if (!pollTimer) {
+        await poll();
+        pollTimer = setInterval(poll, 5000);
+      }
+    })();
+
+    // 面板按 tab 挂载/卸载;不撤定时器的话每切一次就多一套轮询
+    return () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (savedTimer) {
+        clearTimeout(savedTimer);
+        savedTimer = null;
+      }
+    };
   });
 
   async function save() {
@@ -63,7 +83,11 @@
     try {
       await invoke("set_settings", { settings: s });
       saved = true;
-      setTimeout(() => (saved = false), 2000);
+      if (savedTimer) clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => {
+        saved = false;
+        savedTimer = null;
+      }, 2000);
     } catch (e) {
       errMsg = String(e);
     } finally {

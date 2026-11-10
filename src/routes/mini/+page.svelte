@@ -6,10 +6,12 @@
     fmtBytesPerSec,
     metrics,
     startMetrics,
+    stopMetrics,
   } from "$lib/stores/metrics.svelte";
 
   onMount(() => {
     void startMetrics();
+    return () => stopMetrics();
   });
 
   const rows = $derived.by(() => {
