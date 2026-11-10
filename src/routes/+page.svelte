@@ -109,6 +109,18 @@
   const tempColor = $derived(
     temp == null ? undefined : temp >= 75 ? "#e5484d" : temp >= 60 ? "#f5a623" : "#3dd68c"
   );
+
+  // 底栏指标:先拼成数组再统一插分隔符。此前是手写 "·" 字面量,断行处多打了
+  // 一个,显示成 "中断 0.0%  ·  ·  磁盘延迟"。
+  const footerStats = $derived.by(() => {
+    const s = metrics.latest;
+    const items: string[] = [];
+    if (s?.temperatureC != null) items.push(`温度 ${s.temperatureC.toFixed(0)}℃`);
+    items.push(`中断 ${s ? s.interruptPct.toFixed(1) : "--"}%`);
+    items.push(`磁盘延迟 ${s ? (s.diskAvgSecTransfer * 1000).toFixed(1) : "--"} ms`);
+    items.push(`队列 ${s?.diskQueueLength.toFixed(2) ?? "--"}`);
+    return items;
+  });
 </script>
 
 <main>
@@ -282,16 +294,11 @@
   <ProcessTable processes={metrics.processes} />
 
   <footer>
-    <span>
-      {metrics.latest?.temperatureC != null
-        ? `温度 ${metrics.latest.temperatureC.toFixed(0)}℃  ·  `
-        : ""}
-      中断 {metrics.latest ? metrics.latest.interruptPct.toFixed(1) : "--"}%  ·
-      ·  磁盘延迟
-      {metrics.latest
-        ? (metrics.latest.diskAvgSecTransfer * 1000).toFixed(1)
-        : "--"}
-      ms  ·  队列 {metrics.latest?.diskQueueLength.toFixed(2) ?? "--"}
+    <span class="stats">
+      {#each footerStats as stat, i}
+        {#if i > 0}<span class="sep">·</span>{/if}
+        <span>{stat}</span>
+      {/each}
     </span>
     <span class="io-note">进程 I/O 含网络流量口径(sysinfo)</span>
   </footer>
@@ -437,7 +444,18 @@
     border-top: 1px solid var(--border);
     padding-top: 8px;
   }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .stats .sep {
+    opacity: 0.45;
+  }
   .io-note {
     opacity: 0.7;
+    white-space: nowrap;
+    margin-left: 12px;
   }
 </style>
