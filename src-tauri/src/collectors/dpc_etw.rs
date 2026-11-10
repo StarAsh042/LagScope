@@ -70,6 +70,9 @@ impl ModuleTable {
                 let off = ENTRY_HDR + i * STRIDE;
                 let image_base =
                     u64::from_le_bytes(buf[off + 16..off + 24].try_into().unwrap());
+                // ImageSize 是 u32,与 ImageBase 相邻(+24..28)
+                let image_size =
+                    u32::from_le_bytes(buf[off + 24..off + 28].try_into().unwrap()) as u64;
                 // 完整路径文本(\SystemRoot\...),以 NUL 截断
                 let path_buf = &buf[off + 40..off + STRIDE];
                 let path_end = path_buf
@@ -86,20 +89,24 @@ impl ModuleTable {
                 if name.is_empty() || image_base == 0 {
                     continue;
                 }
-                mods.push((image_base, 0, name));
+                mods.push((image_base, image_size.max(1), name));
             }
         }
         mods.sort_by_key(|(base, _, _)| *base);
         Self { modules: mods }
     }
 
-    /// 地址 → 驱动名(按排序基址二分;命中最后一个 ≤ 地址的模块)
+    /// 地址 → 驱动名(按排序基址二分;命中最后一个 ≤ 地址的模块)。
+    ///
+    /// 命中后还要校验地址落在该模块的 [base, base + size) 区间内:只有基址
+    /// 二分会让落在末个模块之后的地址也归给它,DPC 归因就会指错驱动。
     fn lookup(&self, addr: u64) -> Option<&str> {
         let idx = self
             .modules
             .partition_point(|(base, _, _)| *base <= addr)
             .checked_sub(1)?;
-        Some(self.modules[idx].2.as_str())
+        let (base, size, name) = &self.modules[idx];
+        (addr < base.saturating_add(*size)).then_some(name.as_str())
     }
 
     #[allow(dead_code)]
@@ -323,20 +330,52 @@ mod tests {
         );
     }
 
+    fn sample_table() -> ModuleTable {
+        // 区间互不相邻,中间留空洞便于验证上界
+        ModuleTable {
+            modules: vec![
+                (0x1000, 0x1000, "ntoskrnl.exe".into()),
+                (0x5000, 0x2000, "nvlddmkm.sys".into()),
+                (0x9000, 0x0800, "dxgkrnl.sys".into()),
+            ],
+        }
+    }
+
     #[test]
     fn module_table_lookup() {
-        let table = ModuleTable {
-            modules: vec![
-                (0x1000, 0, "ntoskrnl.exe".into()),
-                (0x5000, 0, "nvlddmkm.sys".into()),
-                (0x9000, 0, "dxgkrnl.sys".into()),
-            ],
-        };
-        assert_eq!(table.lookup(0x1000), Some("ntoskrnl.exe"));
-        assert_eq!(table.lookup(0x4FFF), Some("ntoskrnl.exe"));
+        let table = sample_table();
+        assert_eq!(table.lookup(0x1000), Some("ntoskrnl.exe")); // 基址含
+        assert_eq!(table.lookup(0x1FFF), Some("ntoskrnl.exe")); // 上界内
         assert_eq!(table.lookup(0x5000), Some("nvlddmkm.sys"));
-        assert_eq!(table.lookup(0x8ABC), Some("nvlddmkm.sys"));
+        assert_eq!(table.lookup(0x6FFF), Some("nvlddmkm.sys")); // base+size-1
         assert_eq!(table.lookup(0x9000), Some("dxgkrnl.sys"));
         assert_eq!(table.lookup(0x0FFF), None); // 低于首个基址
+    }
+
+    /// 回归:模块 size 之前恒为 0,lookup 只按基址二分,落在末个模块之后的
+    /// 地址会被归给该模块,DPC 归因因此指错驱动。加区间校验后必须是 None。
+    #[test]
+    fn lookup_rejects_address_outside_module() {
+        let table = sample_table();
+        assert_eq!(table.lookup(0x2000), None, "落在空洞里不该归给前一个模块");
+        assert_eq!(table.lookup(0x7000), None, "超出 nvlddmkm 的 [0x5000,0x7000)");
+        assert_eq!(table.lookup(0x9800), None, "超出 dxgkrnl 的上界");
+        assert_eq!(table.lookup(0xFFFF_FFFF), None, "末个模块之后的地址");
+    }
+
+    /// 上界恰好是 base + size 时越界;size 为 0 的条目只能命中基址本身,
+    /// 不能像以前那样吃掉之后的所有地址。
+    #[test]
+    fn lookup_handles_boundary_and_zero_size() {
+        let edge = ModuleTable {
+            modules: vec![
+                (0x1000, 0x1000, "small.sys".into()),
+                (0x5000, 1, "tiny.sys".into()),
+            ],
+        };
+        assert_eq!(edge.lookup(0x1FFF), Some("small.sys"));
+        assert_eq!(edge.lookup(0x2000), None, "base+size 本身已越界");
+        assert_eq!(edge.lookup(0x5000), Some("tiny.sys"));
+        assert_eq!(edge.lookup(0x5001), None);
     }
 }
