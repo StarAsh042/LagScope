@@ -14,6 +14,7 @@ use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
 use crate::state::AppState;
+use crate::store::export::{self, ExportFormat};
 
 /// 帧监测与 DPC 归因的实时运行状态(设置页展示用)
 #[derive(Debug, Serialize)]
@@ -187,6 +188,48 @@ pub fn list_lag_events(
     limit: Option<u32>,
 ) -> Result<Vec<LagEvent>, String> {
     state.db.list_events(limit.unwrap_or(100))
+}
+
+/// 导出结果:落盘路径 + 条数,前端据此提示并「在文件夹中显示」
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub path: String,
+    pub count: usize,
+    pub format: String,
+}
+
+/// 把最近的事件导出成 CSV / JSON 落盘,返回绝对路径供前端 reveal
+#[tauri::command]
+pub fn export_lag_events(
+    app: tauri::AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+    format: String,
+    limit: Option<u32>,
+) -> Result<ExportResult, String> {
+    let fmt = ExportFormat::from_name(&format)?;
+    let events = state
+        .db
+        .list_events(limit.unwrap_or(crate::store::db::RETAIN_ROWS))?;
+    if events.is_empty() {
+        return Err("还没有卡顿事件可以导出".to_string());
+    }
+    let path = export::write_to(&export_dir(&app), &events, fmt)?;
+    Ok(ExportResult {
+        path: path.to_string_lossy().into_owned(),
+        count: events.len(),
+        format: fmt.extension().to_string(),
+    })
+}
+
+/// 导出目录:优先「下载/LagScope」,取不到下载目录时退回应用数据目录
+fn export_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    let base = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .unwrap_or_else(|_| std::env::temp_dir());
+    base.join("LagScope")
 }
 
 /// 立即诊断:抓取当前状态生成一次事件并推送前端(命令与托盘菜单共用)
