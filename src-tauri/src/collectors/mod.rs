@@ -297,11 +297,17 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         ) {
             let mut ev = event;
             match state.db.insert_event(&ev) {
-                Ok(id) => ev.id = Some(id),
-                Err(e) => eprintln!("[db] 事件入库失败: {e}"),
+                Ok(id) => {
+                    ev.id = Some(id);
+                    #[cfg(debug_assertions)]
+                    eprintln!("[lag] 触发: {:?}", ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>());
+                    let _ = app.emit(EVENT_LAG, &ev);
+                }
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("[db] 事件入库失败: {_e}");
+                }
             }
-            eprintln!("[lag] 触发: {:?}", ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>());
-            let _ = app.emit(EVENT_LAG, &ev);
         }
 
         tick += 1;
