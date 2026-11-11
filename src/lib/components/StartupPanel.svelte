@@ -177,12 +177,12 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13.5px;
-    font-weight: 600;
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
   }
   .stats {
-    font-size: 12px;
-    font-weight: 400;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-normal);
     color: var(--text-dim);
     display: flex;
     align-items: center;
@@ -193,7 +193,7 @@
     border: 1px solid var(--border);
     color: var(--text-dim);
     border-radius: var(--radius-lg);
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     padding: 3px 10px;
     cursor: pointer;
   }
@@ -206,7 +206,7 @@
     color: var(--text);
     border-radius: var(--radius-lg);
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--font-sm);
     width: 260px;
   }
   .search:focus {
@@ -214,7 +214,7 @@
   }
   .err {
     color: var(--err);
-    font-size: 12px;
+    font-size: var(--font-sm);
   }
   .hint {
     color: var(--warn);
@@ -222,7 +222,7 @@
   }
   .loading {
     color: var(--text-dim);
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 20px;
     text-align: center;
   }
@@ -234,7 +234,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   th {
     position: sticky;
@@ -244,7 +244,7 @@
     text-align: left;
     padding: 6px 8px;
     border-bottom: 1px solid var(--border);
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     white-space: nowrap;
     z-index: 1;
   }
@@ -282,7 +282,7 @@
     color: var(--warn);
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-sm);
-    font-size: 10px;
+    font-size: var(--font-2xs);
     padding: 1px 5px;
     margin-left: 6px;
   }
@@ -297,7 +297,7 @@
     border: 1px solid var(--accent-border);
     color: var(--accent-strong);
     border-radius: var(--radius-md);
-    font-size: 11px;
+    font-size: var(--font-xs);
     padding: 2px 10px;
     cursor: pointer;
   }
@@ -316,7 +316,7 @@
     cursor: default;
   }
   .note {
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
     border-top: 1px solid var(--border);
     padding-top: 6px;

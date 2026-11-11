@@ -203,8 +203,8 @@
     margin-bottom: 8px;
   }
   .title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
     color: var(--text-dim);
   }
   input {
@@ -213,7 +213,7 @@
     color: var(--text);
     border-radius: var(--radius-lg);
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--font-sm);
     width: 220px;
   }
   input:focus {
@@ -221,7 +221,7 @@
   }
   .err {
     color: var(--err);
-    font-size: 12px;
+    font-size: var(--font-sm);
     margin-bottom: 6px;
   }
   .scroll {
@@ -232,7 +232,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   th {
     position: sticky;
@@ -244,7 +244,7 @@
     border-bottom: 1px solid var(--border);
     cursor: pointer;
     user-select: none;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     white-space: nowrap;
     z-index: 1;
   }
@@ -271,7 +271,7 @@
   }
   .hot {
     color: var(--warn);
-    font-weight: 600;
+    font-weight: var(--weight-bold);
   }
   .badge {
     display: inline-block;
@@ -279,7 +279,7 @@
     color: var(--warn);
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-sm);
-    font-size: 10px;
+    font-size: var(--font-2xs);
     padding: 1px 5px;
     margin-right: 6px;
     vertical-align: middle;
@@ -289,7 +289,7 @@
     border: 1px solid var(--err-border-soft);
     color: var(--err);
     border-radius: var(--radius-md);
-    font-size: 11px;
+    font-size: var(--font-xs);
     padding: 2px 8px;
     cursor: pointer;
   }
@@ -320,13 +320,13 @@
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   }
   .confirm-title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
     color: var(--text);
     margin-bottom: 8px;
   }
   .confirm-body {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     line-height: 1.7;
     color: var(--text);
     margin-bottom: 14px;
@@ -346,7 +346,7 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: var(--radius-lg);
-    font-size: 12px;
+    font-size: var(--font-sm);
     padding: 4px 14px;
     cursor: pointer;
   }

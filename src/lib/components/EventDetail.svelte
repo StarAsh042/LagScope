@@ -192,7 +192,7 @@
     align-items: center;
     justify-content: center;
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-md);
   }
   .head {
     display: flex;
@@ -201,8 +201,8 @@
     gap: var(--space-8);
   }
   .title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
   }
   .head-right {
     display: flex;
@@ -212,15 +212,15 @@
     justify-content: flex-end;
   }
   .ts {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
   }
   .ask {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
   }
   .err {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--err);
     background: var(--err-bg);
     border: 1px solid var(--err-border);
@@ -229,7 +229,7 @@
   }
   .act {
     font-family: inherit;
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     padding: 2px 8px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
@@ -270,19 +270,19 @@
     align-items: baseline;
   }
   .kind {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     white-space: nowrap;
   }
   .d {
-    font-size: 13px;
+    font-size: var(--font-md);
     color: var(--text);
   }
   .counters {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-6) var(--space-16);
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
     background: var(--bg);
     border: 1px solid var(--border);
@@ -301,25 +301,25 @@
     padding: 8px 10px;
   }
   .stitle {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     color: var(--text-dim);
     margin-bottom: 6px;
   }
   .line {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .hung {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 2px 0;
     color: var(--warn);
   }
   .none {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
   }
 </style>

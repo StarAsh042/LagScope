@@ -34,6 +34,19 @@
   --space-16: 16px;
   --space-20: 20px;
 
+  /* 字号刻度:原来 10 档里有 4 档是半像素(10.5/11.5/12.5/13.5),那是逐处调参留下的,不是设计决策。收敛成 6 档整数:半像素向最近的整数档折叠,整数更利于 Windows 在高 DPI 下按设备像素对齐。 */
+  --font-2xs: 10px;
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 13px;
+  --font-lg: 14px;
+  --font-xl: 18px;
+
+  /* 字重:只有三档,加粗一律 bold(600),不要再写 700 */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
   /* 主色 */
   --accent: #3b6cd4;
   --accent-hover: #4a7be0;
@@ -108,7 +121,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: var(--font-lg);
   overflow: hidden;
 }
 
