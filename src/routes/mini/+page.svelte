@@ -112,7 +112,7 @@
     background: transparent;
     border: none;
     color: var(--text-dim);
-    font-size: 10px;
+    font-size: var(--font-2xs);
     cursor: pointer;
     padding: 2px 5px;
   }
@@ -126,7 +126,7 @@
   }
   .k {
     width: 30px;
-    font-size: 10.5px;
+    font-size: var(--font-2xs);
     color: var(--text-dim);
     flex: none;
   }
@@ -146,7 +146,7 @@
   .v {
     width: 74px;
     text-align: right;
-    font-size: 10.5px;
+    font-size: var(--font-2xs);
     color: var(--text);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;

@@ -229,8 +229,8 @@
     gap: var(--space-14);
   }
   .head {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
   }
   .group {
     background: var(--bg);
@@ -243,15 +243,15 @@
     max-width: 520px;
   }
   .gtitle {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     color: var(--text-dim);
   }
   label {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
+    font-size: var(--font-md);
   }
   label.check {
     justify-content: flex-start;
@@ -265,7 +265,7 @@
     color: var(--text);
     border-radius: var(--radius-lg);
     padding: 5px 8px;
-    font-size: 13px;
+    font-size: var(--font-md);
   }
   input[type="number"]:focus {
     border-color: var(--accent);
@@ -281,7 +281,7 @@
     color: var(--on-accent);
     border-radius: var(--radius-xl);
     padding: 7px 22px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   .save:hover {
@@ -293,15 +293,15 @@
   }
   .ok {
     color: var(--ok);
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   .err {
     color: var(--err);
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   .state-badge {
     margin-left: auto;
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
   }
   .state-badge.on {
@@ -309,6 +309,6 @@
   }
   .loading {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-md);
   }
 </style>

@@ -40,7 +40,7 @@
     background: var(--panel);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     pointer-events: auto;
-    font-size: 12px;
+    font-size: var(--font-sm);
     line-height: 1.5;
   }
   .toast.warn {
@@ -60,7 +60,7 @@
     border: 0;
     background: transparent;
     color: var(--text-dim);
-    font-size: 14px;
+    font-size: var(--font-lg);
     line-height: 1;
     padding: 0 2px;
     cursor: pointer;

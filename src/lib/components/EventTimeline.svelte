@@ -199,8 +199,8 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
     color: var(--text-dim);
     margin-bottom: 8px;
   }
@@ -209,8 +209,8 @@
     gap: var(--space-4);
   }
   .mini {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--font-xs);
+    font-weight: var(--weight-bold);
     padding: 2px 7px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
@@ -241,7 +241,7 @@
     width: 100%;
     box-sizing: border-box;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--font-sm);
     padding: 5px 22px 5px 8px;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
@@ -265,7 +265,7 @@
     border: none;
     background: none;
     color: var(--text-dim);
-    font-size: 14px;
+    font-size: var(--font-lg);
     line-height: 1;
     padding: 2px 4px;
     cursor: pointer;
@@ -281,7 +281,7 @@
     align-items: center;
   }
   .chip {
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-family: inherit;
     padding: 2px 7px;
     border-radius: var(--radius-md);
@@ -309,10 +309,10 @@
     margin-left: 3px;
   }
   .clear-all {
-    font-size: 11px;
+    font-size: var(--font-xs);
   }
   .note {
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
     background: var(--bg);
     border: 1px solid var(--border);
@@ -335,13 +335,13 @@
     padding: 0 0 0 6px;
     color: var(--accent);
     font: inherit;
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     cursor: pointer;
     text-decoration: underline;
   }
   .empty {
     color: var(--text-dim);
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 24px 12px;
     text-align: center;
   }
@@ -381,12 +381,12 @@
     align-items: center;
   }
   .ts {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     color: var(--text);
   }
   .fresh {
-    font-size: 10px;
+    font-size: var(--font-2xs);
     background: var(--err);
     color: var(--on-accent);
     border-radius: var(--radius-sm);
@@ -399,14 +399,14 @@
     margin-top: 5px;
   }
   .tag {
-    font-size: 10.5px;
+    font-size: var(--font-2xs);
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     padding: 1px 6px;
   }
   .row3 {
     margin-top: 4px;
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
   }
 </style>

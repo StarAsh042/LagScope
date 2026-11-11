@@ -77,11 +77,11 @@
     dominant-baseline: middle;
   }
   .num {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--font-xl);
+    font-weight: var(--weight-bold);
   }
   .unit {
-    font-size: 10px;
+    font-size: var(--font-2xs);
     fill: var(--text-dim);
   }
   .meta {
@@ -91,12 +91,12 @@
     gap: 1px;
   }
   .label {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text);
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
   .sub {
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
     white-space: nowrap;
     max-width: 112px;

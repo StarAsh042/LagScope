@@ -382,14 +382,14 @@
     gap: var(--space-20);
   }
   h1 {
-    font-size: 18px;
+    font-size: var(--font-xl);
     margin: 0;
     letter-spacing: 0.5px;
   }
   h1 .zh {
-    font-size: 14px;
+    font-size: var(--font-lg);
     color: var(--text-dim);
-    font-weight: 400;
+    font-weight: var(--weight-normal);
     margin-left: 6px;
   }
   nav {
@@ -402,7 +402,7 @@
     color: var(--text-dim);
     border-radius: var(--radius-xl);
     padding: 5px 14px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   nav button:hover {
@@ -419,7 +419,7 @@
     margin-left: 6px;
     background: var(--err);
     color: var(--on-accent);
-    font-size: 10px;
+    font-size: var(--font-2xs);
     border-radius: var(--radius-xl);
     padding: 1px 6px;
     vertical-align: middle;
@@ -435,7 +435,7 @@
     color: var(--on-accent);
     border-radius: var(--radius-xl);
     padding: 6px 16px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   .diag:hover {
@@ -451,7 +451,7 @@
     color: var(--text-dim);
     border-radius: var(--radius-xl);
     padding: 5px 12px;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     cursor: pointer;
   }
   .mini-toggle:hover {
@@ -459,7 +459,7 @@
     border-color: var(--accent);
   }
   .status {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
   }
   .status.on {
@@ -486,7 +486,7 @@
   footer {
     display: flex;
     justify-content: space-between;
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
     border-top: 1px solid var(--border);
     padding-top: 8px;

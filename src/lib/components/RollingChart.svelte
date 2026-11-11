@@ -136,8 +136,8 @@
     min-width: 0;
   }
   .title {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     color: var(--text-dim);
   }
   .plot {
@@ -146,7 +146,7 @@
 
   /* uPlot 自带样式是按浅色主题写的,这里覆盖成深色面板上的观感 */
   .plot :global(.u-legend) {
-    font-size: 11px;
+    font-size: var(--font-xs);
     line-height: 1.4;
     color: var(--text-dim);
     margin: 0;

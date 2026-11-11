@@ -56,12 +56,12 @@
     gap: var(--space-8);
   }
   .title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
     color: var(--err);
   }
   .detail {
-    font-size: 12px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
     overflow-wrap: anywhere;
   }
@@ -70,7 +70,7 @@
     gap: var(--space-8);
   }
   button {
-    font-size: 12px;
+    font-size: var(--font-sm);
     padding: 4px 12px;
     border-radius: var(--radius-lg);
     border: 1px solid var(--warn-border-soft);
