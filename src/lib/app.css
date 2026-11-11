@@ -2,6 +2,10 @@
    命名约定 --x 是基础色,--x-soft/--x-hover/--x-bg/--x-border/--x-strong 是同一语义的分层。
    canvas(uPlot 的轴、网格)与 SVG 属性拿不到 var(),走 src/lib/theme.ts 的 token() 读同一份值。 */
 :root {
+  /* 原生控件(复选框、数字框箭头、滚动条、文本选区)用哪套配色由 color-scheme 决定,
+     不声明就跟随系统。系统是浅色主题的用户会在深色面板上看到白色的控件方块。 */
+  color-scheme: dark;
+
   /* 底层 */
   --bg: #0d1220;
   --panel: #131926;

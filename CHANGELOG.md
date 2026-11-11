@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 修复图表宽度不随窗口变化、缩放后长期停在默认宽度的问题。
 - 修复底栏分隔符重复渲染成「· ·」的问题。
 - 修复结束进程时 `window.confirm` 在 WebView2 中可能不弹出的问题，改为页面内确认层。
+- 修复系统为浅色主题时，复选框与数字输入框等原生控件渲染成白色方块、在深色面板上刺眼的问题。
 
 ## [1.1.1] - 2026-11-08
 
