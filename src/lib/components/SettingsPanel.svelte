@@ -33,6 +33,7 @@
     autostart: boolean;
     enableFrameMonitor: boolean;
     enableDpcWatch: boolean;
+    notifyLag: boolean;
   }
 
   let s = $state<Settings | null>(null);
@@ -204,6 +205,10 @@
             {monitor.dpcActive ? "● 运行中" : "○ 已停止(需管理员)"}
           </span>
         {/if}
+      </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={s.notifyLag} />
+        <span>检测到卡顿时弹系统通知(主窗口在前台时不打扰)</span>
       </label>
     </div>
 
