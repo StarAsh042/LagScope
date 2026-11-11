@@ -4,6 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
 
   import type { StartupItem } from "$lib/types";
+  import StatusNote from "$lib/components/StatusNote.svelte";
 
   let items = $state<StartupItem[]>([]);
   let loading = $state(true);
@@ -92,13 +93,10 @@
   </div>
   <input class="search" type="search" placeholder="搜索名称或命令…" bind:value={search} />
   {#if errMsg}
-    <div class="err">
-      {errMsg}
-      {#if adminHint}<div class="hint">{adminHint}</div>{/if}
-    </div>
+    <StatusNote kind="error" message={errMsg} hint={adminHint} />
   {/if}
   {#if loading}
-    <div class="loading">扫描中…</div>
+    <StatusNote kind="loading" message="扫描中…" />
   {:else}
     <div class="scroll">
       <table>
@@ -211,20 +209,6 @@
   }
   .search:focus {
     border-color: var(--accent);
-  }
-  .err {
-    color: var(--err);
-    font-size: var(--font-sm);
-  }
-  .hint {
-    color: var(--warn);
-    margin-top: 2px;
-  }
-  .loading {
-    color: var(--text-dim);
-    font-size: var(--font-sm);
-    padding: 20px;
-    text-align: center;
   }
   .scroll {
     overflow: auto;

@@ -3,6 +3,7 @@
 
   import type { ProcessInfo } from "$lib/types";
   import { fmtBytesPerSec } from "$lib/stores/metrics.svelte";
+  import StatusNote from "$lib/components/StatusNote.svelte";
 
   let { processes }: { processes: ProcessInfo[] } = $props();
 
@@ -132,7 +133,9 @@
     />
   </div>
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <div class="notes">
+      <StatusNote kind="error" message={errMsg} />
+    </div>
   {/if}
   <div class="scroll">
     <table>
@@ -219,9 +222,7 @@
   input:focus {
     border-color: var(--accent);
   }
-  .err {
-    color: var(--err);
-    font-size: var(--font-sm);
+  .notes {
     margin-bottom: 6px;
   }
   .scroll {

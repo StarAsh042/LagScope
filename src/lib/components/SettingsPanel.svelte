@@ -3,6 +3,8 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  import StatusNote from "$lib/components/StatusNote.svelte";
+
   interface MonitorStatus {
     frameActive: boolean;
     dpcActive: boolean;
@@ -100,7 +102,7 @@
 <div class="panel">
   <div class="head">设置</div>
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <StatusNote kind="error" message={errMsg} />
   {/if}
   {#if s}
     <div class="group">
@@ -212,7 +214,7 @@
       {#if saved}<span class="ok">已保存 ✓</span>{/if}
     </div>
   {:else}
-    <div class="loading">加载中…</div>
+    <StatusNote kind="loading" message="加载中…" />
   {/if}
 </div>
 
@@ -295,10 +297,6 @@
     color: var(--ok);
     font-size: var(--font-sm);
   }
-  .err {
-    color: var(--err);
-    font-size: var(--font-sm);
-  }
   .state-badge {
     margin-left: auto;
     font-size: var(--font-xs);
@@ -306,9 +304,5 @@
   }
   .state-badge.on {
     color: var(--ok);
-  }
-  .loading {
-    color: var(--text-dim);
-    font-size: var(--font-md);
   }
 </style>

@@ -6,6 +6,7 @@
     lagEvents,
   } from "$lib/stores/lagEvents.svelte";
   import { fmtBytes, fmtBytesPerSec } from "$lib/stores/metrics.svelte";
+  import StatusNote from "$lib/components/StatusNote.svelte";
   import type { LagEvent, TopProc } from "$lib/types";
 
   const ev = $derived(lagEvents.selected);
@@ -69,7 +70,7 @@
     </div>
 
     {#if lagEvents.loadError}
-      <div class="err">{lagEvents.loadError}</div>
+      <StatusNote kind="error" message={lagEvents.loadError} />
     {/if}
 
     <div class="reasons">
@@ -169,8 +170,8 @@
     </div>
   </div>
 {:else}
-  <div class="detail empty">
-    从左侧选择一个卡顿事件查看归因详情
+  <div class="detail">
+    <StatusNote kind="empty" message="从左侧选择一个卡顿事件查看归因详情" fill />
   </div>
 {/if}
 
@@ -187,12 +188,6 @@
     gap: var(--space-12);
     min-width: 0;
     min-height: 0;
-  }
-  .detail.empty {
-    align-items: center;
-    justify-content: center;
-    color: var(--text-dim);
-    font-size: var(--font-md);
   }
   .head {
     display: flex;
@@ -218,14 +213,6 @@
   .ask {
     font-size: var(--font-sm);
     color: var(--text-dim);
-  }
-  .err {
-    font-size: var(--font-sm);
-    color: var(--err);
-    background: var(--err-bg);
-    border: 1px solid var(--err-border);
-    border-radius: var(--radius-lg);
-    padding: 6px 9px;
   }
   .act {
     font-family: inherit;
