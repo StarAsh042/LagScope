@@ -20,6 +20,7 @@
     type RangeKey,
   } from "$lib/timeline-filter";
   import type { LagEvent } from "$lib/types";
+  import StatusNote from "$lib/components/StatusNote.svelte";
 
   function summary(ev: LagEvent): string {
     return ev.reasons.map((r) => kindMeta(r.kind).label).join(" · ");
@@ -134,24 +135,32 @@
     </div>
   {/if}
 
-  {#if lagEvents.exporting}
-    <div class="note">正在导出…</div>
-  {:else if lagEvents.exportError}
-    <div class="note err">{lagEvents.exportError}</div>
-  {:else if lagEvents.exportNote}
-    <div class="note ok">
-      {lagEvents.exportNote}
-      <button class="link" onclick={() => revealLastExport()}>在文件夹中显示</button>
+  {#if lagEvents.exporting || lagEvents.exportError || lagEvents.exportNote}
+    <div class="notes">
+      {#if lagEvents.exporting}
+        <StatusNote kind="loading" message="正在导出…" />
+      {:else if lagEvents.exportError}
+        <StatusNote kind="error" message={lagEvents.exportError} />
+      {:else}
+        <StatusNote
+          kind="success"
+          message={lagEvents.exportNote}
+          actionLabel="在文件夹中显示"
+          onAction={() => revealLastExport()}
+        />
+      {/if}
     </div>
   {/if}
 
   {#if lagEvents.list.length === 0}
-    <div class="empty">暂无卡顿事件 —— 引擎正在后台持续监测</div>
+    <StatusNote kind="empty" message="暂无卡顿事件 —— 引擎正在后台持续监测" />
   {:else if visible.length === 0}
-    <div class="empty">
-      没有符合条件的事件
-      <button class="link" onclick={clearFilter}>清除筛选</button>
-    </div>
+    <StatusNote
+      kind="empty"
+      message="没有符合条件的事件"
+      actionLabel="清除筛选"
+      onAction={clearFilter}
+    />
   {:else}
     <div class="scroll">
       {#each visible as ev (ev.id ?? ev.tsMs)}
@@ -311,23 +320,8 @@
   .clear-all {
     font-size: var(--font-xs);
   }
-  .note {
-    font-size: var(--font-xs);
-    color: var(--text-dim);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 6px 8px;
+  .notes {
     margin-bottom: 8px;
-    word-break: break-all;
-  }
-  .note.ok {
-    border-color: var(--ok-border);
-    color: var(--ok);
-  }
-  .note.err {
-    border-color: var(--err-border);
-    color: var(--err);
   }
   .link {
     background: none;
@@ -338,17 +332,6 @@
     font-size: var(--font-xs);
     cursor: pointer;
     text-decoration: underline;
-  }
-  .empty {
-    color: var(--text-dim);
-    font-size: var(--font-sm);
-    padding: 24px 12px;
-    text-align: center;
-  }
-  .empty .link {
-    display: block;
-    margin: 6px auto 0;
-    padding: 0;
   }
   .scroll {
     overflow: auto;
