@@ -3,6 +3,7 @@
 mod collectors;
 mod commands;
 mod engine;
+mod notify;
 mod settings;
 mod startup;
 mod state;
@@ -45,6 +46,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // 事件库:appdata/lagscope.db
             let data_dir = app.path().app_data_dir().expect("获取 appdata 目录失败");
@@ -57,6 +59,7 @@ pub fn run() {
                 db,
                 settings.to_detector_config(),
                 settings.close_to_tray,
+                settings.notify_lag,
             ));
             app.manage(state.clone());
             collectors::start(app.handle().clone(), state.clone());

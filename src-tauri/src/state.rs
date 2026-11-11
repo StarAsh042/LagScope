@@ -30,6 +30,8 @@ pub struct AppState {
     pub config: Mutex<DetectorConfig>,
     /// 关窗是否隐藏到托盘
     pub close_to_tray: Mutex<bool>,
+    /// 检测到卡顿时是否弹系统通知
+    pub notify_lag: Mutex<bool>,
     /// PresentMon 帧监测(Some = 运行中)
     pub frame_monitor: Mutex<Option<PresentMonWatch>>,
     /// ETW DPC 归因(需管理员;失败为 None)
@@ -37,7 +39,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: Db, config: DetectorConfig, close_to_tray: bool) -> Self {
+    pub fn new(db: Db, config: DetectorConfig, close_to_tray: bool, notify_lag: bool) -> Self {
         Self {
             // System::new 失败意味着连基本内存信息都无法初始化,直接 panic
             sys: Mutex::new(System::new().expect("sysinfo System::new 失败")),
@@ -47,6 +49,7 @@ impl AppState {
             db,
             config: Mutex::new(config),
             close_to_tray: Mutex::new(close_to_tray),
+            notify_lag: Mutex::new(notify_lag),
             frame_monitor: Mutex::new(None),
             dpc_watch: Mutex::new(None),
         }

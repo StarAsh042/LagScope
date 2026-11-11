@@ -269,6 +269,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
 
         // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
         let cfg = state.config.lock().unwrap().clone();
+        let notify_lag = *state.notify_lag.lock().unwrap();
         // 新鲜度守卫:监测器意外死亡后快照会冻结,3 秒内的数据才有效
         let now = sample.ts_ms;
         let game = {
@@ -306,6 +307,8 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
                         "[lag] 触发: {:?}",
                         ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>()
                     );
+                    // 系统通知:窗口在前台时不打扰,失败也不影响入库与界面
+                    crate::notify::notify_event(&app, notify_lag, &ev);
                     let _ = app.emit(EVENT_LAG, &ev);
                 }
                 Err(_e) => {

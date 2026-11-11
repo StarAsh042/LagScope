@@ -39,6 +39,8 @@ pub struct Settings {
     pub enable_frame_monitor: bool,
     /// ETW DPC 驱动归因(需管理员)
     pub enable_dpc_watch: bool,
+    /// 检测到卡顿时弹系统通知
+    pub notify_lag: bool,
 }
 
 impl Default for Settings {
@@ -63,6 +65,7 @@ impl Default for Settings {
             autostart: false,
             enable_frame_monitor: true,
             enable_dpc_watch: true,
+            notify_lag: true,
         }
     }
 }
@@ -137,6 +140,7 @@ pub fn set_settings(
     // 热更新检测器
     *state.config.lock().unwrap() = settings.to_detector_config();
     *state.close_to_tray.lock().unwrap() = settings.close_to_tray;
+    *state.notify_lag.lock().unwrap() = settings.notify_lag;
     // 事件库保留条数(改小时顺带立刻裁剪一次,不必等下次写入)
     let _ = state.db.set_retain_rows(settings.retain_rows);
 
@@ -212,6 +216,19 @@ mod tests {
         assert_eq!(c.interrupt_sustain_s, 9);
         assert_eq!(c.stutter_gap_ms, 55.5);
         assert_eq!(c.dpc_total_threshold, 12_345.0);
+    }
+
+    /// 旧版 settings.json 没有 notifyLag 字段时必须默认开启通知,
+    /// 不能因为多了一个字段就让整份设置回落默认(用户调过的阈值会丢)。
+    #[test]
+    fn legacy_settings_without_notify_lag_defaults_to_on() {
+        let legacy = serde_json::json!({
+            "cpuPct": 70.0,
+            "closeToTray": false
+        });
+        let s: Settings = serde_json::from_value(legacy).expect("旧设置应能反序列化");
+        assert!(s.notify_lag, "缺字段时应默认开启通知");
+        assert_eq!(s.cpu_pct, 70.0, "已有字段必须原样保留");
     }
 
     /// 旧版 settings.json 没有 retainRows 字段时必须回落到默认保留条数,
