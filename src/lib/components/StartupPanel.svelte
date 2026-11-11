@@ -208,7 +208,6 @@
     padding: 5px 10px;
     font-size: 12px;
     width: 260px;
-    outline: none;
   }
   .search:focus {
     border-color: var(--accent);

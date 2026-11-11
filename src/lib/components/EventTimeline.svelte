@@ -252,7 +252,6 @@
     color: var(--placeholder);
   }
   .search input:focus {
-    outline: none;
     border-color: var(--accent);
   }
   .search input::-webkit-search-cancel-button {

@@ -215,7 +215,6 @@
     padding: 5px 10px;
     font-size: 12px;
     width: 220px;
-    outline: none;
   }
   input:focus {
     border-color: var(--accent);
@@ -353,10 +352,6 @@
   }
   .act:hover {
     background: var(--panel-alt);
-  }
-  .act:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
   }
   .act.danger {
     border-color: var(--err-border-soft);
