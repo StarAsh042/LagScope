@@ -47,6 +47,7 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 - **常驻后台**：托盘图标（左键切窗口，右键菜单含悬浮窗 / 立即诊断 / 退出），关闭窗口隐藏到托盘继续采集，单实例，可选开机自启。
 - **启动项分析**：注册表 Run 键（HKCU / HKLM / WOW64）与启动文件夹扫描，禁用 / 启用与任务管理器同机制（StartupApproved），残留项检测。
 - **设置页**：全部阈值可调并热生效；帧监测与 DPC 归因开关；设置与事件数据持久化于本机。
+- **权限引导**：以普通权限运行时，设置页显示当前权限与 DPC 失败原因，并提供「以管理员身份重启」；系统级启动项因权限不足失败时同样给出入口。取消 UAC 按正常操作处理，不会报错。
 
 ## 卡顿检测机制
 
@@ -72,7 +73,7 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 | Node.js | >= 20（CI 使用 22） | 从源码构建时必需 | 运行 `npm` 脚本与前端类型检查 |
 | npm | 随 Node.js 提供 | 从源码构建时必需 | 本仓库使用 `package-lock.json`（lockfileVersion 3） |
 | Rust | stable（本地实测 1.99.0） | 从源码构建时必需 | 编译 `src-tauri`；`edition = "2024"` 需要较新的 stable |
-| 管理员权限 | 不适用 | 否 | ETW DPC 驱动归因需要管理员权限，非管理员时自动降级；其余功能不需要 |
+| 管理员权限 | 不适用 | 否 | ETW DPC 驱动归因与系统级（HKLM）启动项写入需要管理员权限，非管理员时自动降级；可在应用内「以管理员身份重启」 |
 | [Intel PresentMon](https://github.com/GameTechDev/PresentMon) | 随安装包提供 `extras/PresentMon.exe` | 否 | 关闭后失去帧率与帧间隔尖峰监测 |
 
 ## 安装
@@ -197,6 +198,7 @@ src-tauri/src/         Rust 后端
   engine/              卡顿检测引擎与阈值
   store/               SQLite 事件库
   settings.rs          设置持久化与热更新
+  admin.rs             管理员权限检测与提权重启
 src-tauri/capabilities/ Tauri 权限配置
 src-tauri/extras/       PresentMon.exe
 src-tauri/icons/        应用图标

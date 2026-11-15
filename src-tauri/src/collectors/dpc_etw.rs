@@ -12,11 +12,13 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::engine::DpcSample;
+use ferrisetw::native::EvntraceNativeError;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::provider::kernel_providers::DPC_PROVIDER;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::KernelTrace;
+use ferrisetw::trace::{KernelTrace, TraceError};
+use windows::Win32::Foundation::ERROR_ACCESS_DENIED;
 
 /// 内核模块表:按基址排序,用于例程地址 → 驱动名
 struct ModuleTable {
@@ -130,6 +132,9 @@ fn now_ms() -> u64 {
 pub struct DpcWatch {
     latest: Arc<Mutex<Option<DpcSample>>>,
     available: Arc<AtomicBool>,
+    /// 内核会话创建失败的原因;成功时为 None。
+    /// 前端据此把「没有权限」从控制台里捞出来展示给用户。
+    error: Arc<Mutex<Option<String>>>,
     /// 置位后会话线程停止 trace 并退出(设置开关用)
     stop: Arc<AtomicBool>,
     handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -143,6 +148,7 @@ impl DpcWatch {
         let watch = Self {
             latest: Arc::new(Mutex::new(None)),
             available: Arc::new(AtomicBool::new(false)),
+            error: Arc::new(Mutex::new(None)),
             stop: Arc::new(AtomicBool::new(false)),
             handle: Mutex::new(None),
         };
@@ -150,6 +156,7 @@ impl DpcWatch {
         let (tx, rx) = std::sync::mpsc::channel::<u64>();
         let latest = watch.latest.clone();
         let available = watch.available.clone();
+        let error = watch.error.clone();
         let stop_session = watch.stop.clone();
         let stop_mt = watch.stop.clone();
 
@@ -228,6 +235,8 @@ impl DpcWatch {
                     }
                     Err(e) => {
                         eprintln!("[dpc-etw] 内核会话创建失败(需管理员): {e:?}");
+                        *error.lock().unwrap_or_else(|p| p.into_inner()) =
+                            Some(describe_start_error(&e));
                     }
                 }
             })
@@ -250,6 +259,35 @@ impl DpcWatch {
 
     pub fn is_available(&self) -> bool {
         self.available.load(Ordering::Relaxed)
+    }
+
+    /// 内核会话创建失败的原因;会话正常时为 None
+    pub fn last_error(&self) -> Option<String> {
+        self.error.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+}
+
+/// StartTraceW 失败时 ferrisetw 把 HRESULT 当成 raw OS error 塞进 io::Error:
+/// 拒绝访问既可能是 5,也可能是 0x80070005。两种都要认。
+fn is_access_denied(raw: i32) -> bool {
+    let hr = raw as u32;
+    raw == ERROR_ACCESS_DENIED.0 as i32
+        || ((hr & 0xFFFF) == ERROR_ACCESS_DENIED.0 && (hr >> 16) == 0x8007)
+}
+
+/// 把 ETW 启动失败翻译成用户能看懂的一句话。
+fn describe_start_error(err: &TraceError) -> String {
+    match err {
+        // ERROR_ACCESS_DENIED:普通权限下 StartTraceW 的典型失败
+        TraceError::EtwNativeError(EvntraceNativeError::IoError(io))
+            if io.raw_os_error().is_some_and(is_access_denied) =>
+        {
+            "需要管理员权限才能创建内核跟踪会话".to_string()
+        }
+        TraceError::EtwNativeError(EvntraceNativeError::AlreadyExist) => {
+            "已有同名内核会话在运行,重启 LagScope 后可恢复".to_string()
+        }
+        other => format!("创建内核跟踪会话失败: {other:?}"),
     }
 }
 
@@ -377,5 +415,36 @@ mod tests {
         assert_eq!(edge.lookup(0x2000), None, "base+size 本身已越界");
         assert_eq!(edge.lookup(0x5000), Some("tiny.sys"));
         assert_eq!(edge.lookup(0x5001), None);
+    }
+
+    fn io_error(raw: i32) -> TraceError {
+        TraceError::EtwNativeError(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(raw),
+        ))
+    }
+
+    /// ferrisetw 把 StartTraceW 的 HRESULT 直接塞进 raw_os_error,
+    /// 只认 5 会漏掉真实的拒绝访问(0x80070005),提示就退回成调试字符串。
+    #[test]
+    fn access_denied_is_explained_for_both_encodings() {
+        assert_eq!(
+            describe_start_error(&io_error(5)),
+            "需要管理员权限才能创建内核跟踪会话"
+        );
+        assert_eq!(
+            describe_start_error(&io_error(0x8007_0005u32 as i32)),
+            "需要管理员权限才能创建内核跟踪会话"
+        );
+        // 其他错误不能被误判成权限问题
+        assert!(describe_start_error(&io_error(2)).starts_with("创建内核跟踪会话失败"));
+    }
+
+    #[test]
+    fn existing_session_is_explained() {
+        let err = TraceError::EtwNativeError(EvntraceNativeError::AlreadyExist);
+        assert_eq!(
+            describe_start_error(&err),
+            "已有同名内核会话在运行,重启 LagScope 后可恢复"
+        );
     }
 }

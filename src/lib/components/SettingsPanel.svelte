@@ -3,14 +3,9 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  import AdminNotice from "$lib/components/AdminNotice.svelte";
   import StatusNote from "$lib/components/StatusNote.svelte";
-
-  interface MonitorStatus {
-    frameActive: boolean;
-    dpcActive: boolean;
-    frameEnabled: boolean;
-    dpcEnabled: boolean;
-  }
+  import type { MonitorStatus } from "$lib/types";
 
   let monitor = $state<MonitorStatus | null>(null);
 
@@ -201,8 +196,16 @@
         <input type="checkbox" bind:checked={s.enableDpcWatch} />
         <span>DPC 驱动归因(ETW 内核跟踪,需管理员权限)</span>
         {#if monitor?.dpcEnabled}
-          <span class="state-badge" class:on={monitor.dpcActive}>
-            {monitor.dpcActive ? "● 运行中" : "○ 已停止(需管理员)"}
+          <span
+            class="state-badge"
+            class:on={monitor.dpcActive}
+            title={monitor.dpcError ?? ""}
+          >
+            {monitor.dpcActive
+              ? "● 运行中"
+              : monitor.elevated
+                ? "○ 已停止"
+                : "○ 已停止(需管理员)"}
           </span>
         {/if}
       </label>
@@ -210,6 +213,15 @@
         <input type="checkbox" bind:checked={s.notifyLag} />
         <span>检测到卡顿时弹系统通知(主窗口在前台时不打扰)</span>
       </label>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">运行权限</div>
+      <!-- DPC 与系统级启动项的共同前提,全应用只做这一处入口 -->
+      <AdminNotice
+        elevated={monitor?.elevated ?? null}
+        reason={monitor?.dpcError ?? ""}
+      />
     </div>
 
     <div class="actions">
