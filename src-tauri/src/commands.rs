@@ -27,6 +27,10 @@ pub struct MonitorStatus {
     /// 用户是否开启了对应功能
     pub frame_enabled: bool,
     pub dpc_enabled: bool,
+    /// 当前进程是否以管理员权限运行
+    pub elevated: bool,
+    /// DPC 会话创建失败的原因(仅失败时有值)
+    pub dpc_error: Option<String>,
 }
 
 /// 查询监测器运行状态
@@ -44,11 +48,20 @@ pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> Monitor
         .unwrap()
         .as_ref()
         .map(|w| w.is_available());
+    // 只在"开了但没跑起来"时才有值:跑成功了这条原因就该消失
+    let dpc_error = state
+        .dpc_watch
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|w| w.last_error());
     MonitorStatus {
         frame_active: frame == Some(true),
         dpc_active: dpc == Some(true),
         frame_enabled: frame.is_some(),
         dpc_enabled: dpc.is_some(),
+        elevated: crate::admin::is_elevated(),
+        dpc_error,
     }
 }
 
@@ -301,11 +314,29 @@ pub fn diagnose_now(
     run_diagnose(&app, &state)
 }
 
+/// 当前进程是否以管理员权限运行
+#[tauri::command]
+pub fn get_elevation() -> bool {
+    crate::admin::is_elevated()
+}
+
+/// 以管理员身份重启自身。
+///
+/// DPC 内核跟踪与系统级(HKLM)启动项都要管理员权限,而普通权限下这两处只会
+/// 静默失败。与其让用户自己去找 exe 右键,不如从这里带 UAC 重新拉起。
+/// 返回 Started 时本进程随即退出,前端收不到回包是正常的。
+#[tauri::command]
+pub fn relaunch_as_admin(app: AppHandle) -> Result<crate::admin::RelaunchOutcome, String> {
+    let outcome = crate::admin::relaunch_as_admin()?;
+    if matches!(outcome, crate::admin::RelaunchOutcome::Started) {
+        app.exit(0);
+    }
+    Ok(outcome)
+}
+
 #[cfg(test)]
 mod tests {
     use std::process::{Command, Stdio};
-
-    use serde::Serialize;
 
     use sysinfo::Pid;
 

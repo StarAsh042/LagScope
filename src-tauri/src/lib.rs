@@ -1,5 +1,6 @@
 //! LagScope 卡顿透视 —— 监测电脑卡顿的原因。
 
+mod admin;
 mod collectors;
 mod commands;
 mod engine;
@@ -32,6 +33,10 @@ fn toggle_main_window(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 提权重启拉起来的新进程:先等父进程彻底退出,否则单实例插件会把我们
+    // 当成第二个实例,转发完参数就自杀(必须早于插件注册)
+    admin::wait_for_relaunch_target();
+
     tauri::Builder::default()
         // 必须最先注册:二次启动时唤起已有窗口
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -151,6 +156,8 @@ pub fn run() {
             commands::hide_mini,
             commands::show_main,
             commands::get_monitor_status,
+            commands::get_elevation,
+            commands::relaunch_as_admin,
             startup::get_startup_items,
             startup::set_startup_enabled,
             settings::get_settings,

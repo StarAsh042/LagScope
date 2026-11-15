@@ -3,6 +3,8 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  import { ADMIN_HINT, relaunchAsAdmin } from "$lib/admin";
+  import { errorText } from "$lib/errors";
   import type { StartupItem } from "$lib/types";
   import StatusNote from "$lib/components/StatusNote.svelte";
 
@@ -23,11 +25,26 @@
   const isFolder = (it: StartupItem) =>
     it.source === "userFolder" || it.source === "commonFolder";
 
-  const adminHint = $derived(
-    errMsg.includes("需要管理员权限")
-      ? "关闭 LagScope,右键「以管理员身份运行」后再试。"
-      : ""
-  );
+  const adminHint = $derived(errMsg.includes("需要管理员权限") ? ADMIN_HINT : "");
+
+  let relaunching = $state(false);
+  /** 取消 / 失败提示与 errMsg 分开:权限错误和重试入口必须留着 */
+  let relaunchNote = $state("");
+
+  /** 与设置页同一个入口:拉起重启后本进程退出,通常收不到回包 */
+  async function relaunch() {
+    relaunching = true;
+    relaunchNote = "";
+    try {
+      // 拿到 false 说明用户在 UAC 弹窗上点了「否」,这不是失败:
+      // 原来的权限错误与重试入口都保留,只补一句状态
+      if (!(await relaunchAsAdmin())) relaunchNote = "已取消提权，权限未变更。";
+    } catch (e) {
+      relaunchNote = errorText(e);
+    } finally {
+      relaunching = false;
+    }
+  }
 
   async function load() {
     loading = true;
@@ -35,7 +52,7 @@
     try {
       items = await invoke<StartupItem[]>("get_startup_items");
     } catch (e) {
-      errMsg = String(e);
+      errMsg = errorText(e);
     } finally {
       loading = false;
     }
@@ -76,7 +93,7 @@
       });
       await load();
     } catch (e) {
-      errMsg = String(e);
+      errMsg = errorText(e);
     } finally {
       busy = "";
     }
@@ -93,7 +110,16 @@
   </div>
   <input class="search" type="search" placeholder="搜索名称或命令…" bind:value={search} />
   {#if errMsg}
-    <StatusNote kind="error" message={errMsg} hint={adminHint} />
+    <StatusNote
+      kind="error"
+      message={errMsg}
+      hint={adminHint}
+      actionLabel={adminHint ? (relaunching ? "正在提权…" : "以管理员身份重启") : ""}
+      onAction={relaunch}
+    />
+  {/if}
+  {#if relaunchNote}
+    <p class="relaunch-note">{relaunchNote}</p>
   {/if}
   {#if loading}
     <StatusNote kind="loading" message="扫描中…" />
@@ -304,5 +330,10 @@
     color: var(--text-dim);
     border-top: 1px solid var(--border);
     padding-top: 6px;
+  }
+  .relaunch-note {
+    margin: 0;
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
 </style>

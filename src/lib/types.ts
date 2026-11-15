@@ -103,6 +103,18 @@ export interface DpcSample {
   drivers: [string, number][];
 }
 
+/** 帧监测与 DPC 归因的实时运行状态(设置页展示用) */
+export interface MonitorStatus {
+  frameActive: boolean;
+  dpcActive: boolean;
+  frameEnabled: boolean;
+  dpcEnabled: boolean;
+  /** 当前进程是否以管理员权限运行 */
+  elevated: boolean;
+  /** DPC 会话创建失败的原因,仅失败时有值 */
+  dpcError: string | null;
+}
+
 export interface LagEvent {
   id: number | null;
   tsMs: number;
