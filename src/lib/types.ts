@@ -136,3 +136,13 @@ export interface LogLine {
   target: string;
   message: string;
 }
+
+/** 悬浮窗自定义设置(后端 Settings 的子集) */
+export interface MiniSettings {
+  miniWidth: number;
+  miniHeight: number;
+  miniX: number;
+  miniY: number;
+  miniOpacity: number;
+  miniMetrics: string[];
+}

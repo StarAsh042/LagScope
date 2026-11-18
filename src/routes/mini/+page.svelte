@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
 
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     fmtBytesPerSec,
     metrics,
@@ -10,6 +11,15 @@
   } from "$lib/stores/metrics.svelte";
   import { isDismissShortcut } from "$lib/shortcuts";
   import { levelColor } from "$lib/theme";
+  import type { MiniSettings } from "$lib/types";
+
+  const ALL_METRICS = ["CPU", "内存", "GPU", "磁盘", "网络", "帧率"];
+
+  let mini = $state<MiniSettings | null>(null);
+  const visibleKeys = $derived(
+    mini?.miniMetrics?.length ? mini.miniMetrics : ALL_METRICS,
+  );
+  const opacity = $derived(mini?.miniOpacity ?? 1);
 
   /** Esc 收起悬浮窗(和其他浮层一致) */
   function onKeydown(e: KeyboardEvent) {
@@ -18,10 +28,34 @@
 
   onMount(() => {
     void startMetrics();
-    return () => stopMetrics();
-  });
+    void invoke<MiniSettings>("get_settings")
+      .then((v) => (mini = v))
+      .catch(() => {});
 
-  const rows = $derived.by(() => {
+    // 拖动保存位置(节流 400ms,避免每次移动都写盘)
+    let moveTimer: ReturnType<typeof setTimeout> | null = null;
+    void getCurrentWindow()
+      .onMoved(({ payload }) => {
+        if (moveTimer) clearTimeout(moveTimer);
+        moveTimer = setTimeout(() => {
+          void invoke("save_mini_position", { x: payload.x, y: payload.y });
+          moveTimer = null;
+        }, 400);
+      })
+      .then((unlisten) => {
+        cleanupMove = unlisten;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (moveTimer) clearTimeout(moveTimer);
+      cleanupMove?.();
+      stopMetrics();
+    };
+  });
+  let cleanupMove: (() => void) | null = null;
+
+  const allRows = $derived.by(() => {
     const s = metrics.latest;
     const g = metrics.game;
     return [
@@ -58,6 +92,8 @@
     ];
   });
 
+  const rows = $derived(allRows.filter((r) => visibleKeys.includes(r.key)));
+
   const barColor = (pct: number) =>
     levelColor(pct);
 </script>
@@ -67,6 +103,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="mini"
+  style:opacity
   data-tauri-drag-region
   ondblclick={() => {
     void invoke("show_main");

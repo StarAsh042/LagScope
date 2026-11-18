@@ -113,6 +113,24 @@ pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
     }
 }
 
+/// 把设置里的悬浮窗尺寸/位置应用到当前窗口(保存设置与启动时共用)
+///
+/// 位置两轴任一为负表示"未设置",只更新尺寸;窗口不存在时静默跳过。
+pub fn apply_mini_window(app: &AppHandle, settings: &crate::settings::Settings) {
+    let Some(w) = app.get_webview_window("mini") else {
+        return;
+    };
+    let (width, height) = settings.mini_size();
+    if let Err(e) = w.set_size(tauri::LogicalSize { width, height }) {
+        logging::warn("mini", format!("调整悬浮窗尺寸失败: {e}"));
+    }
+    if let Some((x, y)) = settings.mini_position()
+        && let Err(e) = w.set_position(tauri::PhysicalPosition { x, y })
+    {
+        logging::warn("mini", format!("调整悬浮窗位置失败: {e}"));
+    }
+}
+
 /// 悬浮迷你窗:启动时已预创建(隐藏),这里只做显示/隐藏切换
 #[tauri::command]
 pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
@@ -128,16 +146,21 @@ pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
         // 理论上不会走到(setup 已预创建);兜底再建一次
         None => {
             use tauri::WebviewUrl;
-            tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
+            let settings = crate::settings::load_settings(&app);
+            let (width, height) = settings.mini_size();
+            let w = tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
                 .title("LagScope 悬浮窗")
-                .inner_size(300.0, 96.0)
+                .inner_size(width, height)
                 .decorations(false)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(false)
                 .build()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string())?;
+            if let Some((x, y)) = settings.mini_position() {
+                let _ = w.set_position(tauri::PhysicalPosition { x, y });
+            }
+            Ok(())
         }
     }
 }

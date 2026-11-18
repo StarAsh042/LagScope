@@ -75,15 +75,18 @@ pub fn run() {
             // 预创建悬浮迷你窗(隐藏):避免在 command 中创建窗口导致的渲染问题
             {
                 use tauri::WebviewUrl;
+                let (mini_w, mini_h) = settings.mini_size();
                 tauri::WebviewWindowBuilder::new(app, "mini", WebviewUrl::App("mini".into()))
                     .title("LagScope 悬浮窗")
-                    .inner_size(300.0, 96.0)
+                    .inner_size(mini_w, mini_h)
                     .decorations(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
                     .resizable(false)
                     .visible(false)
                     .build()?;
+                // 启动时应用已保存的位置(尺寸已在 builder 中设好)
+                commands::apply_mini_window(app.handle(), &settings);
             }
 
             // 帧监测(PresentMon):按设置启动
@@ -167,7 +170,8 @@ pub fn run() {
             startup::get_startup_items,
             startup::set_startup_enabled,
             settings::get_settings,
-            settings::set_settings
+            settings::set_settings,
+            settings::save_mini_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
