@@ -137,7 +137,24 @@ export interface LogLine {
   message: string;
 }
 
-/** 悬浮窗自定义设置(后端 Settings 的子集) */
+/** 每磁盘卷实时 I/O 速率 */
+export interface VolumeIo {
+  mount: string;
+  readBps: number;
+  writeBps: number;
+}
+
+export interface NicIo {
+  name: string;
+  rxBps: number;
+  txBps: number;
+}
+
+export interface IoBreakdown {
+  volumes: VolumeIo[];
+  nics: NicIo[];
+}
+
 export interface MiniSettings {
   miniWidth: number;
   miniHeight: number;

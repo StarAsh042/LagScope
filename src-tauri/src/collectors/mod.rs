@@ -91,6 +91,38 @@ pub struct DiskInfo {
     pub free: u64,
 }
 
+/// 单块磁盘卷(逻辑磁盘)的读写速率 B/s
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeIo {
+    pub mount: String,
+    pub read_bps: u64,
+    pub write_bps: u64,
+}
+
+/// 单个网卡的收发速率 B/s
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NicIo {
+    pub name: String,
+    pub rx_bps: u64,
+    pub tx_bps: u64,
+}
+
+/// I/O 细分快照(每 1Hz 更新,单独命令拉取,不进入 metrics:sample 推送)
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IoBreakdown {
+    pub volumes: Vec<VolumeIo>,
+    pub nics: Vec<NicIo>,
+}
+
+/// 把累计计数的差分换算为 B/s,并在计数器回绕/重置时归零。
+/// 公开仅供测试使用,采集线程每秒调用。
+pub fn rate_per_sec(cur: u64, prev: u64) -> u64 {
+    cur.saturating_sub(prev)
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -117,6 +149,8 @@ struct PdhSet<'a> {
     disk_sec_transfer: Option<pdh::Counter>,
     disk_queue: Option<pdh::Counter>,
     disk_idle_pct: Option<pdh::Counter>,
+    disk_instance_read: Option<pdh::Counter>,
+    disk_instance_write: Option<pdh::Counter>,
     dpc_per_sec: Option<pdh::Counter>,
     interrupt_pct: Option<pdh::Counter>,
     gpu_util: Option<pdh::Counter>,
@@ -149,6 +183,8 @@ impl<'a> PdhSet<'a> {
             disk_sec_transfer: add(q, r"\PhysicalDisk(_Total)\Avg. Disk sec/Transfer"),
             disk_queue: add(q, r"\PhysicalDisk(_Total)\Avg. Disk Queue Length"),
             disk_idle_pct: add(q, r"\PhysicalDisk(_Total)\% Idle Time"),
+            disk_instance_read: add(q, r"\LogicalDisk(*)\Disk Read Bytes/sec"),
+            disk_instance_write: add(q, r"\LogicalDisk(*)\Disk Write Bytes/sec"),
             dpc_per_sec: add_first(
                 q,
                 &[
@@ -187,6 +223,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     }
     let mut prev_io: HashMap<u32, (u64, u64)> = HashMap::new();
     let mut prev_net: (u64, u64) = (0, 0);
+    let mut prev_nic: HashMap<String, (u64, u64)> = HashMap::new();
     let mut detector = LagDetector::new();
     // 挂起窗口检测在独立线程(检测调用最坏阻塞 2s/窗口,不能占用采样线程)
     let hung_watch = hung_window::HungWatch::start();
@@ -194,6 +231,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     thread::sleep(COLLECT_INTERVAL);
 
     let mut tick: u64 = 0;
+    let mut cur_nic: HashMap<String, (u64, u64)> = HashMap::with_capacity(networks.len());
     loop {
         let t0 = Instant::now();
 
@@ -205,10 +243,27 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         networks.refresh(true);
         let mut net_rx_total = 0u64;
         let mut net_tx_total = 0u64;
-        for data in networks.values() {
-            net_rx_total += data.received();
-            net_tx_total += data.transmitted();
+        cur_nic.clear();
+        for (name, data) in networks.iter() {
+            let rx = data.received();
+            let tx = data.transmitted();
+            net_rx_total += rx;
+            net_tx_total += tx;
+            cur_nic.insert(name.to_string_lossy().into_owned(), (rx, tx));
         }
+        let nics: Vec<NicIo> = cur_nic
+            .iter()
+            .filter_map(|(name, (rx, tx))| {
+                let (pr, pt) = prev_nic.get(name).copied().unwrap_or((*rx, *tx));
+                let (rx_bps, tx_bps) = (rate_per_sec(*rx, pr), rate_per_sec(*tx, pt));
+                (rx_bps > 0 || tx_bps > 0).then(|| NicIo {
+                    name: name.clone(),
+                    rx_bps,
+                    tx_bps,
+                })
+            })
+            .collect();
+        prev_nic = cur_nic.clone();
         let (net_rx_bps, net_tx_bps) = (
             net_rx_total.saturating_sub(prev_net.0),
             net_tx_total.saturating_sub(prev_net.1),
@@ -259,6 +314,32 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
             let _ = q.collect();
         }
         let sample = build_sample(&sys, pdh_set.as_ref(), net_rx_bps, net_tx_bps);
+
+        // 每网卡差分结果写入缓存,由前端按需拉取
+        *state.nics.lock().unwrap() = nics;
+
+        // 每卷读写速率从 PDH 通配符计数器读取(_Total 实例不计入细分)
+        if let Some(cs) = pdh_set.as_ref() {
+            let read_rates: HashMap<String, u64> = cs.disk_instance_read.as_ref()
+                .map(|c| cs.q.read_instances(c).into_iter().map(|(k, v)| (k, v.max(0.0) as u64)).collect())
+                .unwrap_or_default();
+            let write_rates: HashMap<String, u64> = cs.disk_instance_write.as_ref()
+                .map(|c| cs.q.read_instances(c).into_iter().map(|(k, v)| (k, v.max(0.0) as u64)).collect())
+                .unwrap_or_default();
+            let volumes: Vec<VolumeIo> = read_rates
+                .keys()
+                .chain(write_rates.keys())
+                .filter(|k| k.as_str() != "_Total")
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .map(|k| VolumeIo {
+                    mount: k.clone(),
+                    read_bps: read_rates.get(k).copied().unwrap_or(0),
+                    write_bps: write_rates.get(k).copied().unwrap_or(0),
+                })
+                .collect();
+            *state.volumes.lock().unwrap() = volumes;
+        }
 
         // 缓存与检测引擎共用同一份数据:每 tick 只有两次 Arc 引用计数自增,
         // 不再各自深拷贝 300 个进程快照
@@ -417,4 +498,26 @@ fn build_sample(
     }
 
     sample
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rate_per_sec_handles_normal_and_reset() {
+        assert_eq!(rate_per_sec(1_000, 400), 600);
+        assert_eq!(rate_per_sec(400, 1_000), 0, "计数器回绕应归零而非下溢");
+        assert_eq!(rate_per_sec(500, 500), 0);
+    }
+
+    #[test]
+    fn io_breakdown_serializes_camel_case() {
+        let v = VolumeIo { mount: "C:".into(), read_bps: 1, write_bps: 2 };
+        let n = NicIo { name: "以太网".into(), rx_bps: 3, tx_bps: 4 };
+        let b = IoBreakdown { volumes: vec![v], nics: vec![n] };
+        let json = serde_json::to_value(&b).unwrap();
+        assert_eq!(json["volumes"][0]["readBps"], 1);
+        assert_eq!(json["nics"][0]["txBps"], 4);
+    }
 }

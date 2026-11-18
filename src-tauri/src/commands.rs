@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::collectors::hung_window;
 use crate::collectors::presentmon::PresentMonWatch;
-use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::collectors::{DiskInfo, IoBreakdown, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
 use crate::logging;
 use crate::state::AppState;
@@ -204,6 +204,15 @@ pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<A
 #[tauri::command]
 pub fn get_disks(state: State<'_, std::sync::Arc<AppState>>) -> Vec<DiskInfo> {
     state.disks.lock().unwrap().clone()
+}
+
+/// 每磁盘卷与每网卡的实时 I/O 速率(1Hz 更新,前端按需轮询)
+#[tauri::command]
+pub fn get_io_breakdown(state: State<'_, std::sync::Arc<AppState>>) -> IoBreakdown {
+    IoBreakdown {
+        volumes: state.volumes.lock().unwrap().clone(),
+        nics: state.nics.lock().unwrap().clone(),
+    }
 }
 
 /// 结束进程(对应任务管理器的"结束任务")

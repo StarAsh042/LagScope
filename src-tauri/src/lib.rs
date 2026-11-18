@@ -153,6 +153,7 @@ pub fn run() {
             commands::get_processes,
             commands::get_latest_sample,
             commands::get_disks,
+            commands::get_io_breakdown,
             commands::kill_process,
             commands::list_lag_events,
             commands::delete_lag_events,

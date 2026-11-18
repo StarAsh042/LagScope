@@ -7,6 +7,7 @@
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
+  import IoBreakdown from "$lib/components/IoBreakdown.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
@@ -341,6 +342,8 @@
       />
     {/if}
   </section>
+
+  <IoBreakdown io={metrics.io} />
 
   <ProcessTable processes={metrics.processes} />
 

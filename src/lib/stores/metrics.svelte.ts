@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { errorText } from "$lib/errors";
 import { notify } from "$lib/toast.svelte";
-import type { DiskInfo, GameSample, MetricSample, ProcessInfo } from "$lib/types";
+import type { DiskInfo, GameSample, IoBreakdown, MetricSample, ProcessInfo } from "$lib/types";
 
 /** 历史窗口:120 秒(1Hz) */
 export const HISTORY_LEN = 120;
@@ -16,6 +16,7 @@ export const metrics = $state({
   history: [] as MetricSample[],
   processes: [] as ProcessInfo[],
   disks: [] as DiskInfo[],
+  io: { volumes: [], nics: [] } as IoBreakdown,
   game: null as GameSample | null,
   gameHistory: [] as GameSample[],
   connected: false,
@@ -91,6 +92,17 @@ export async function startMetrics() {
   };
   await pollDisks();
   timers.push(setInterval(pollDisks, 30000));
+
+  // I/O 细分(每卷/每网卡速率,2s 轮询即可)
+  const pollIo = async () => {
+    try {
+      metrics.io = await invoke<IoBreakdown>("get_io_breakdown");
+    } catch (err) {
+      console.error("get_io_breakdown 失败", err);
+    }
+  };
+  await pollIo();
+  timers.push(setInterval(pollIo, 2000));
 }
 
 /**
