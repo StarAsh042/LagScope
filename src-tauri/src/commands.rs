@@ -13,6 +13,7 @@ use crate::collectors::hung_window;
 use crate::collectors::presentmon::PresentMonWatch;
 use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
+use crate::logging;
 use crate::state::AppState;
 use crate::store::export::{self, ExportFormat};
 
@@ -86,8 +87,11 @@ pub fn set_frame_monitor(
                 Ok(p) if p.exists() => {
                     *fm = Some(PresentMonWatch::start(&p, stutter_gap_ms));
                 }
-                Ok(p) => eprintln!("[presentmon] 未找到 PresentMon.exe: {}", p.display()),
-                Err(e) => eprintln!("[presentmon] 解析资源路径失败: {e}"),
+                Ok(p) => logging::warn(
+                    "presentmon",
+                    format!("未找到 PresentMon.exe: {}", p.display()),
+                ),
+                Err(e) => logging::warn("presentmon", format!("解析资源路径失败: {e}")),
             },
         }
     } else {

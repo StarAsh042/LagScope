@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::engine::DpcSample;
+use crate::logging;
 use ferrisetw::native::EvntraceNativeError;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
@@ -234,7 +235,10 @@ impl DpcWatch {
                         let _ = trace.stop();
                     }
                     Err(e) => {
-                        eprintln!("[dpc-etw] 内核会话创建失败(需管理员): {e:?}");
+                        logging::error(
+                            "dpc-etw",
+                            format!("内核会话创建失败(需管理员): {e:?}"),
+                        );
                         *error.lock().unwrap_or_else(|p| p.into_inner()) =
                             Some(describe_start_error(&e));
                     }

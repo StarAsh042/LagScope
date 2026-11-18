@@ -4,6 +4,7 @@ mod admin;
 mod collectors;
 mod commands;
 mod engine;
+mod logging;
 mod notify;
 mod settings;
 mod startup;
@@ -56,6 +57,8 @@ pub fn run() {
             // 事件库:appdata/lagscope.db
             let data_dir = app.path().app_data_dir().expect("获取 appdata 目录失败");
             std::fs::create_dir_all(&data_dir).ok();
+            logging::init(&data_dir).ok();
+            logging::info("app", "LagScope 启动");
             let db = Db::open(&data_dir.join("lagscope.db")).expect("打开事件数据库失败");
 
             // 设置 → 检测阈值 / 关窗行为
@@ -107,13 +110,13 @@ pub fn run() {
                     "show" => toggle_main_window(app),
                     "mini" => {
                         if let Err(e) = commands::toggle_mini(app.clone()) {
-                            eprintln!("[tray] 悬浮窗切换失败: {e}");
+                            logging::error("tray", format!("悬浮窗切换失败: {e}"));
                         }
                     }
                     "diagnose" => {
                         let state = app.state::<Arc<AppState>>();
                         if let Err(e) = commands::run_diagnose(app, &state) {
-                            eprintln!("[tray] 立即诊断失败: {e}");
+                            logging::error("tray", format!("立即诊断失败: {e}"));
                         }
                     }
                     "quit" => app.exit(0),
@@ -158,6 +161,9 @@ pub fn run() {
             commands::get_monitor_status,
             commands::get_elevation,
             commands::relaunch_as_admin,
+            logging::get_logs,
+            logging::clear_logs,
+            logging::open_log_dir,
             startup::get_startup_items,
             startup::set_startup_enabled,
             settings::get_settings,

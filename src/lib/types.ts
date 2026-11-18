@@ -127,3 +127,12 @@ export interface LagEvent {
   game: GameSample | null;
   dpcTop: DpcSample | null;
 }
+
+/** 应用写入的运行日志单行(后端 src-tauri/src/logging.rs) */
+export interface LogLine {
+  /** epoch 毫秒,展示时按浏览器本地时区格式化 */
+  tsMs: number;
+  level: string;
+  target: string;
+  message: string;
+}

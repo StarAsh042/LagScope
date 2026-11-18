@@ -17,6 +17,7 @@ use sysinfo::{Disks, Networks, ProcessesToUpdate, System};
 use tauri::{AppHandle, Emitter};
 
 use crate::engine::LagDetector;
+use crate::logging;
 use crate::state::AppState;
 
 pub const COLLECT_INTERVAL: Duration = Duration::from_millis(1000);
@@ -129,7 +130,7 @@ impl<'a> PdhSet<'a> {
             match q.add(path) {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    eprintln!("[pdh] 跳过计数器 {path}: {e}");
+                    logging::warn("pdh", format!("跳过计数器 {path}: {e}"));
                     None
                 }
             }
@@ -173,7 +174,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
     let pdh_query = match pdh::PdhQuery::new() {
         Ok(q) => Some(q),
         Err(e) => {
-            eprintln!("[pdh] 打开查询失败,系统级计数器不可用: {e}");
+            logging::warn("pdh", format!("打开查询失败,系统级计数器不可用: {e}"));
             None
         }
     };
@@ -302,18 +303,19 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
             match state.db.insert_event(&ev) {
                 Ok(id) => {
                     ev.id = Some(id);
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[lag] 触发: {:?}",
-                        ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>()
+                    logging::debug(
+                        "lag",
+                        format!(
+                            "触发: {:?}",
+                            ev.reasons.iter().map(|r| &r.kind).collect::<Vec<_>>()
+                        ),
                     );
                     // 系统通知:窗口在前台时不打扰,失败也不影响入库与界面
                     crate::notify::notify_event(&app, notify_lag, &ev);
                     let _ = app.emit(EVENT_LAG, &ev);
                 }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[db] 事件入库失败: {_e}");
+                Err(e) => {
+                    logging::error("db", format!("事件入库失败: {e}"));
                 }
             }
         }

@@ -7,6 +7,7 @@
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
@@ -28,7 +29,7 @@
   import { levelColor, token } from "$lib/theme";
   import type { MetricSample } from "$lib/types";
 
-  let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
+  let tab = $state<"dashboard" | "events" | "startup" | "logs" | "settings">("dashboard");
 
   /** 兜底界面里显示出错的是哪一块,避免用户以为整个程序挂了 */
   const tabLabel = $derived(
@@ -38,7 +39,9 @@
         ? "卡顿事件"
         : tab === "startup"
           ? "启动项"
-          : "设置"
+          : tab === "logs"
+            ? "运行日志"
+            : "设置"
   );
 
   // macOS 上主修饰键是 Cmd,提示文案跟着平台走
@@ -186,6 +189,9 @@
           onclick={() => (tab = "startup")}
         >
           启动项
+        </button>
+        <button class:active={tab === "logs"} onclick={() => (tab = "logs")}>
+          日志
         </button>
         <button
           class:active={tab === "settings"}
@@ -354,6 +360,8 @@
     </div>
   {:else if tab === "startup"}
     <StartupPanel />
+  {:else if tab === "logs"}
+    <LogViewer />
   {:else}
     <SettingsPanel />
   {/if}

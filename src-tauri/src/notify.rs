@@ -6,6 +6,7 @@
 use tauri::Manager;
 
 use crate::engine::LagEvent;
+use crate::logging;
 
 /// 通知正文最多列出几条归因,其余折叠成「等 N 项」
 pub const MAX_BODY_REASONS: usize = 3;
@@ -64,9 +65,8 @@ pub fn notify_event(app: &tauri::AppHandle, enabled: bool, event: &LagEvent) {
 
     use tauri_plugin_notification::NotificationExt;
     let (title, body) = compose(event);
-    if let Err(_e) = app.notification().builder().title(title).body(body).show() {
-        #[cfg(debug_assertions)]
-        eprintln!("[notify] 发送通知失败: {_e}");
+    if let Err(e) = app.notification().builder().title(title).body(body).show() {
+        logging::warn("notify", format!("发送通知失败: {e}"));
     }
 }
 
