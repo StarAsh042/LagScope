@@ -1,6 +1,7 @@
 <script lang="ts">
   // 每磁盘卷 / 每网卡细分:定位具体是哪块盘或哪张网卡在产生流量。
   // 数据由 metrics store 每 2s 从后端 get_io_breakdown 拉取,不进入 1Hz 图表推送。
+  import Icon from "$lib/components/Icon.svelte";
   import type { IoBreakdown } from "$lib/types";
   import { fmtBytesPerSec } from "$lib/stores/metrics.svelte";
 
@@ -27,7 +28,7 @@
         <div class="row">
           <div class="head">
             <span class="name" title={v.mount}>{v.mount}</span>
-            <span class="rate">↓{fmtBytesPerSec(v.readBps)} ↑{fmtBytesPerSec(v.writeBps)}</span>
+            <span class="rate"><Icon name="down" size={12} />{fmtBytesPerSec(v.readBps)} <Icon name="up" size={12} />{fmtBytesPerSec(v.writeBps)}</span>
           </div>
           <div class="bar">
             <span class="read" style="width:{pct(v.readBps, maxVol)}%"></span>
@@ -46,7 +47,7 @@
         <div class="row">
           <div class="head">
             <span class="name" title={n.name}>{n.name}</span>
-            <span class="rate">↓{fmtBytesPerSec(n.rxBps)} ↑{fmtBytesPerSec(n.txBps)}</span>
+            <span class="rate"><Icon name="down" size={12} />{fmtBytesPerSec(n.rxBps)} <Icon name="up" size={12} />{fmtBytesPerSec(n.txBps)}</span>
           </div>
           <div class="bar">
             <span class="rx" style="width:{pct(n.rxBps, maxNic)}%"></span>
@@ -98,6 +99,9 @@
     color: var(--text);
   }
   .rate {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     flex: none;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;

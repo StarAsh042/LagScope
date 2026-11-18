@@ -7,6 +7,7 @@
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
+  import Icon from "$lib/components/Icon.svelte";
   import IoBreakdown from "$lib/components/IoBreakdown.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
@@ -171,16 +172,16 @@
 <main>
   <header>
     <div class="brand">
-      <h1>LagScope <span class="zh">卡顿透视</span></h1>
+      <h1><Icon name="pulse" size={20} /> LagScope <span class="zh">卡顿透视</span></h1>
       <nav>
         <button
           class:active={tab === "dashboard"}
           onclick={() => (tab = "dashboard")}
         >
-          仪表盘
+          <Icon name="dashboard" /> 仪表盘
         </button>
         <button class:active={tab === "events"} onclick={() => (tab = "events")}>
-          卡顿事件
+          <Icon name="events" /> 卡顿事件
           {#if lagEvents.list.length}
             <span class="badge">{lagEvents.list.length}</span>
           {/if}
@@ -189,17 +190,17 @@
           class:active={tab === "startup"}
           onclick={() => (tab = "startup")}
         >
-          启动项
+          <Icon name="startup" /> 启动项
         </button>
         <button class:active={tab === "logs"} onclick={() => (tab = "logs")}>
-          日志
+          <Icon name="logs" /> 日志
         </button>
         <button
           class:active={tab === "settings"}
           onclick={() => (tab = "settings")}
           title={settingsTitle}
         >
-          设置
+          <Icon name="settings" /> 设置
         </button>
       </nav>
     </div>
@@ -210,10 +211,10 @@
         </button>
       {/if}
       <button class="mini-toggle" onclick={() => invoke("toggle_mini")}>
-        悬浮窗
+        <Icon name="mini" /> 悬浮窗
       </button>
       <span class="status" class:on={metrics.connected}>
-        {metrics.connected ? "● 采集中" : "○ 连接中…"}
+        <span class="dot"></span>{metrics.connected ? "采集中" : "连接中…"}
       </span>
     </div>
   </header>
@@ -393,6 +394,9 @@
     gap: var(--space-20);
   }
   h1 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
     font-size: var(--font-xl);
     margin: 0;
     letter-spacing: 0.5px;
@@ -408,6 +412,9 @@
     gap: var(--space-6);
   }
   nav button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-dim);
@@ -457,6 +464,9 @@
     cursor: default;
   }
   .mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text-dim);
@@ -470,8 +480,18 @@
     border-color: var(--accent);
   }
   .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: var(--font-sm);
     color: var(--text-dim);
+  }
+  .status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
   }
   .status.on {
     color: var(--ok);

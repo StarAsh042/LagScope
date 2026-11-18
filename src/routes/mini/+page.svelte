@@ -3,6 +3,7 @@
 
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import Icon from "$lib/components/Icon.svelte";
   import {
     fmtBytesPerSec,
     metrics,
@@ -111,7 +112,7 @@
   }}
 >
   <button class="close" title="隐藏悬浮窗" onclick={() => invoke("hide_mini")}>
-    ✕
+    <Icon name="close" size={12} />
   </button>
   {#each rows as r (r.key)}
     <div class="row">
@@ -146,6 +147,8 @@
     position: absolute;
     top: 2px;
     right: 4px;
+    display: grid;
+    place-items: center;
     background: transparent;
     border: none;
     color: var(--text-dim);
