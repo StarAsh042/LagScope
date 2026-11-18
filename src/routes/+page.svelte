@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
 
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
 
   import ErrorBoundary from "$lib/components/ErrorBoundary.svelte";
   import EventDetail from "$lib/components/EventDetail.svelte";
@@ -32,6 +33,8 @@
   import type { MetricSample } from "$lib/types";
 
   let tab = $state<"dashboard" | "events" | "startup" | "logs" | "settings">("dashboard");
+  let maximized = $state(false);
+  const appWindow = getCurrentWindow();
 
   /** 兜底界面里显示出错的是哪一块,避免用户以为整个程序挂了 */
   const tabLabel = $derived(
@@ -63,12 +66,17 @@
   }
 
   onMount(() => {
+    void appWindow.isMaximized().then((v) => (maximized = v));
+    let unlistenResize: (() => void) | null = null;
+    void appWindow.onResized(() => appWindow.isMaximized().then((v) => (maximized = v)))
+      .then((fn) => (unlistenResize = fn));
     void startMetrics();
     void startLagEvents();
 
     // 主窗口与迷你窗是两个路由页面,来回切换会重新挂载本组件;
     // 不撤掉轮询,每切一次就多一套 2s/30s 定时器与事件监听。
     return () => {
+      unlistenResize?.();
       stopMetrics();
       stopLagEvents();
     };
@@ -170,7 +178,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main>
-  <header>
+  <header data-tauri-drag-region="deep">
     <div class="brand">
       <h1><Icon name="pulse" size={20} /> LagScope <span class="zh">卡顿透视</span></h1>
       <nav>
@@ -216,6 +224,17 @@
       <span class="status" class:on={metrics.connected}>
         <span class="dot"></span>{metrics.connected ? "采集中" : "连接中…"}
       </span>
+      <div class="window-controls">
+        <button title="最小化" data-tauri-drag-region="false" onclick={() => void appWindow.minimize()}>
+          <Icon name="minimize" size={13} />
+        </button>
+        <button title={maximized ? "还原" : "最大化"} data-tauri-drag-region="false" onclick={() => void appWindow.toggleMaximize()}>
+          <Icon name={maximized ? "restore" : "maximize"} size={12} />
+        </button>
+        <button class="quit" title="关闭" data-tauri-drag-region="false" onclick={() => void appWindow.close()}>
+          <Icon name="close" size={12} />
+        </button>
+      </div>
     </div>
   </header>
 
@@ -387,6 +406,32 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin: -12px -16px 0;
+    padding: 12px 16px 0;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, var(--panel-alt)), transparent);
+  }
+  .window-controls {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .window-controls button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .window-controls button:hover {
+    background: var(--panel-alt);
+    color: var(--text);
+  }
+  .window-controls button.quit:hover {
+    background: var(--err);
+    color: var(--on-accent);
   }
   .brand {
     display: flex;

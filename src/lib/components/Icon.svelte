@@ -3,7 +3,8 @@
   // 只做工具界面需要的那一小组,避免引入整套图标库。
   export type IconName =
     | "pulse" | "dashboard" | "events" | "startup" | "logs"
-    | "settings" | "close" | "mini" | "down" | "up";
+    | "settings" | "close" | "mini" | "down" | "up"
+    | "minimize" | "maximize" | "restore";
 
   let {
     name,
@@ -23,6 +24,9 @@
     mini: "M4 5h16v14H4zM12 11h8v8h-8z",
     down: "M12 4v15M6 13l6 6 6-6",
     up: "M12 20V5M6 11l6-6 6 6",
+    minimize: "M5 12h14",
+    maximize: "M5 5h14v14H5z",
+    restore: "M8 8h11v11H8zM5 5h11v3",
   };
 </script>
 
