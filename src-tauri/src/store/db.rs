@@ -247,7 +247,7 @@ mod tests {
             ts_ms: 1_700_000_000_000,
             reasons: vec![LagReason {
                 kind: "page_faults".into(),
-                detail: "硬缺页".into(),
+                detail: "内存换页".into(),
                 value: 512.0,
             }],
             counters: MetricSample {

@@ -342,12 +342,12 @@
       />
     {/if}
     <RollingChart
-      title="DPC / 硬缺页(次·页/秒)"
+      title="DPC / 内存换页(次·页/秒)"
       data={chartData((s) => [s.dpcPerSec, s.pageInputPerSec])}
       unit="/s"
       series={[
         { label: "DPC/s", color: token("--chart-dpc", "#e5484d") },
-        { label: "硬缺页/s", color: token("--chart-page-fault", "#f5a623") },
+        { label: "内存换页/s", color: token("--chart-page-fault", "#f5a623") },
       ]}
     />
     {#if metrics.gameHistory.length}

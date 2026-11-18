@@ -42,7 +42,7 @@ pub struct MetricSample {
     /// 提交内存(虚拟内存承诺)
     pub mem_commit_used: u64,
     pub mem_commit_limit: u64,
-    /// 硬缺页(从磁盘读页)速率 页/秒
+    /// 内存换页(从磁盘读页)速率 页/秒
     pub page_input_per_sec: f64,
     pub disk_read_bps: u64,
     pub disk_write_bps: u64,

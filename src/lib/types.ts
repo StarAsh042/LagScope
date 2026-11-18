@@ -13,7 +13,7 @@ export interface MetricSample {
   /** 提交内存(字节) */
   memCommitUsed: number;
   memCommitLimit: number;
-  /** 硬缺页速率 页/秒 */
+  /** 内存换页速率 页/秒 */
   pageInputPerSec: number;
   diskReadBps: number;
   diskWriteBps: number;

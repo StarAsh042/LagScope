@@ -139,11 +139,11 @@
         <input type="number" min="50" max="100" bind:value={s.commitPct} />
       </label>
       <label>
-        <span>硬缺页阈值 页/秒</span>
+        <span>内存换页阈值 页/秒</span>
         <input type="number" min="100" max="5000" bind:value={s.pageInput} />
       </label>
       <label>
-        <span>硬缺页持续秒数</span>
+        <span>内存换页持续秒数</span>
         <input type="number" min="2" max="60" bind:value={s.pageSustainS} />
       </label>
       <label>

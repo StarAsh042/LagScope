@@ -166,7 +166,7 @@ export function select(ev: LagEvent) {
 export const KIND_META: Record<string, { label: string; token: string; fallback: string }> = {
   cpu: { label: "CPU 满载", token: "--kind-cpu", fallback: "#e5484d" },
   mem_pressure: { label: "内存压力", token: "--kind-mem", fallback: "#f5a623" },
-  page_faults: { label: "硬缺页", token: "--kind-page-fault", fallback: "#e28c3a" },
+  page_faults: { label: "内存换页", token: "--kind-page-fault", fallback: "#e28c3a" },
   disk_latency: { label: "磁盘延迟", token: "--kind-disk", fallback: "#d46cb4" },
   interrupt: { label: "中断高载", token: "--kind-interrupt", fallback: "#9a6cd4" },
   hung_window: { label: "窗口假死", token: "--kind-hung", fallback: "#3b6cd4" },

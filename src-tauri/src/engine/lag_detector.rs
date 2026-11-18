@@ -16,9 +16,9 @@ pub struct DetectorConfig {
     pub cpu_sustain_s: u64,
     /// 提交内存占比阈值 %
     pub commit_pct: f64,
-    /// 硬缺页速率阈值 页/秒
+    /// 内存换页速率阈值 页/秒
     pub page_input: f64,
-    /// 硬缺页需持续秒数(独立于 CPU 阈值,避免改 CPU 设置串扰内存告警)
+    /// 内存换页需持续秒数(独立于 CPU 阈值,避免改 CPU 设置串扰内存告警)
     pub page_sustain_s: u64,
     /// 提交内存需持续秒数(独立于磁盘阈值)
     pub mem_sustain_s: u64,
@@ -309,7 +309,7 @@ impl LagDetector {
             reasons.push(LagReason {
                 kind: "page_faults".into(),
                 detail: format!(
-                    "硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)",
+                    "内存换页 {v:.0} 页/秒 持续 {} 秒(内存不足)",
                     cfg.page_sustain_s
                 ),
                 value: v,
@@ -621,7 +621,7 @@ mod tests {
         }
     }
 
-    /// 回归:硬缺页的持续时间必须走 page_sustain_s,不能复用 cpu_sustain_s。
+    /// 回归:内存换页的持续时间必须走 page_sustain_s,不能复用 cpu_sustain_s。
     #[test]
     fn page_faults_use_own_sustain_window() {
         let cfg = DetectorConfig {

@@ -96,7 +96,7 @@
           : "--"}
         %
       </span>
-      <span>硬缺页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
+      <span>内存换页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
       <span>
         磁盘延迟 {(ev.counters.diskAvgSecTransfer * 1000).toFixed(1)} ms
       </span>
