@@ -126,14 +126,17 @@
       <span class="v">{r.text}</span>
     </div>
   {/each}
+  {#if !rows.length}
+    <div class="empty">未勾选任何指标</div>
+  {/if}
 </div>
 
 <style>
   .mini {
     position: fixed;
     inset: 0;
-    background: var(--bg-glass);
-    border: 1px solid var(--border);
+    background: linear-gradient(155deg, color-mix(in srgb, var(--panel) 88%, var(--accent) 12%), var(--bg-glass));
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
     border-radius: var(--radius-2xl);
     padding: 8px 10px;
     display: flex;
@@ -142,6 +145,16 @@
     gap: 3px;
     user-select: none;
     overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  }
+  .mini::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 10px;
+    right: 10px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 70%, transparent), transparent);
   }
   .close {
     position: absolute;
@@ -158,6 +171,8 @@
   }
   .close:hover {
     color: var(--text);
+    background: var(--panel-alt);
+    border-radius: var(--radius-xs);
   }
   .row {
     display: flex;
@@ -172,7 +187,7 @@
   }
   .bar {
     flex: 1;
-    height: 6px;
+    height: 5px;
     background: var(--track-deep);
     border-radius: var(--radius-xs);
     overflow: hidden;
@@ -187,10 +202,17 @@
     width: 74px;
     text-align: right;
     font-size: var(--font-2xs);
+    font-weight: var(--weight-medium);
     color: var(--text);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     flex: none;
+  }
+  .empty {
+    font-size: var(--font-2xs);
+    color: var(--text-dim);
+    text-align: center;
+    padding: 6px 0;
   }
 </style>
