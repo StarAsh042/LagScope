@@ -234,7 +234,7 @@
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={s.enableFrameMonitor} />
-        <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
+        <span>渲染帧监测(PresentMon,检测帧率骤降与帧间隔尖峰)</span>
         {#if monitor?.frameEnabled}
           <span class="state-badge" class:on={monitor.frameActive}>
             {monitor.frameActive ? "● 运行中" : "○ 已停止"}

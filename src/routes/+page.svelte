@@ -146,7 +146,7 @@
   // 帧监测(PresentMon):渲染大户的每秒帧统计
   const gameSub = $derived(
     metrics.game
-      ? `${metrics.game.app} · 卡帧 ${metrics.game.stutters}`
+      ? `${metrics.game.app} · 掉帧 ${metrics.game.stutters}`
       : "无渲染活动"
   );
   const gameData = $derived(

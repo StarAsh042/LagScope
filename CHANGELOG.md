@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 变更帧卡顿的展示口径：原「游戏卡帧」统一改为「渲染卡顿」，帧监测选项、帧率浮窗与事件详情不再暗示只有游戏才会出现帧间隔尖峰（内部事件类型 `frame_stutter` 不变）。
 - 变更启动项页：系统级（HKLM）启动项现在也能直接启用/禁用，遇到权限不足会提示「以管理员身份运行」。
 - 变更事件入库逻辑：写入 SQLite 失败时不再广播一条前端可见的幽灵事件。
 

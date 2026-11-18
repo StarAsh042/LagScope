@@ -170,7 +170,7 @@ export const KIND_META: Record<string, { label: string; token: string; fallback:
   disk_latency: { label: "磁盘延迟", token: "--kind-disk", fallback: "#d46cb4" },
   interrupt: { label: "中断高载", token: "--kind-interrupt", fallback: "#9a6cd4" },
   hung_window: { label: "窗口假死", token: "--kind-hung", fallback: "#3b6cd4" },
-  frame_stutter: { label: "游戏卡帧", token: "--kind-frame", fallback: "#3dd68c" },
+  frame_stutter: { label: "渲染卡顿", token: "--kind-frame", fallback: "#3dd68c" },
   dpc_driver: { label: "DPC 驱动风暴", token: "--kind-dpc", fallback: "#e28c3a" },
   manual: { label: "手动诊断", token: "--kind-manual", fallback: "#8b94a7" },
 };
