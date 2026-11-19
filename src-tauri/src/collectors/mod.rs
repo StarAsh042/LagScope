@@ -306,7 +306,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
                     free: d.available_space(),
                 })
                 .collect();
-            *state.disks.lock().unwrap() = infos;
+            *crate::state::lock_or_recover(&state.disks) = infos;
         }
 
         // PDH 采样并组装系统级指标
@@ -316,7 +316,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
         let sample = build_sample(&sys, pdh_set.as_ref(), net_rx_bps, net_tx_bps);
 
         // 每网卡差分结果写入缓存,由前端按需拉取
-        *state.nics.lock().unwrap() = nics;
+        *crate::state::lock_or_recover(&state.nics) = nics;
 
         // 每卷读写速率从 PDH 通配符计数器读取(_Total 实例不计入细分)
         if let Some(cs) = pdh_set.as_ref() {
@@ -338,24 +338,24 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
                     write_bps: write_rates.get(k).copied().unwrap_or(0),
                 })
                 .collect();
-            *state.volumes.lock().unwrap() = volumes;
+            *crate::state::lock_or_recover(&state.volumes) = volumes;
         }
 
         // 缓存与检测引擎共用同一份数据:每 tick 只有两次 Arc 引用计数自增,
         // 不再各自深拷贝 300 个进程快照
         let snapshot = Arc::new(processes);
-        *state.processes.lock().unwrap() = Arc::clone(&snapshot);
+        *crate::state::lock_or_recover(&state.processes) = Arc::clone(&snapshot);
         let sample = Arc::new(sample);
-        *state.last_sample.lock().unwrap() = Some(Arc::clone(&sample));
+        *crate::state::lock_or_recover(&state.last_sample) = Some(Arc::clone(&sample));
         let _ = app.emit(EVENT_METRICS, sample.as_ref());
 
         // 卡顿检测引擎:命中阈值 → 快照入库 + 推送前端(阈值可被设置页热更新)
-        let cfg = state.config.lock().unwrap().clone();
-        let notify_lag = *state.notify_lag.lock().unwrap();
+        let cfg = crate::state::lock_or_recover(&state.config).clone();
+        let notify_lag = *crate::state::lock_or_recover(&state.notify_lag);
         // 新鲜度守卫:监测器意外死亡后快照会冻结,3 秒内的数据才有效
         let now = sample.ts_ms;
         let game = {
-            let fm = state.frame_monitor.lock().unwrap();
+            let fm = crate::state::lock_or_recover(&state.frame_monitor);
             fm.as_ref()
                 .and_then(|w| w.snapshot())
                 .filter(|g| now.saturating_sub(g.ts_ms) < 3000)
@@ -364,7 +364,7 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
             let _ = app.emit(EVENT_GAME, g);
         }
         let dpc = {
-            let w = state.dpc_watch.lock().unwrap();
+            let w = crate::state::lock_or_recover(&state.dpc_watch);
             w.as_ref()
                 .and_then(|w| w.snapshot())
                 .filter(|d| now.saturating_sub(d.ts_ms) < 3000)

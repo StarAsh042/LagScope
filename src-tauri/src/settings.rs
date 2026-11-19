@@ -205,9 +205,9 @@ pub fn set_settings(
     store.save().map_err(|e| format!("保存设置失败: {e}"))?;
 
     // 热更新检测器
-    *state.config.lock().unwrap() = settings.to_detector_config();
-    *state.close_to_tray.lock().unwrap() = settings.close_to_tray;
-    *state.notify_lag.lock().unwrap() = settings.notify_lag;
+    *crate::state::lock_or_recover(&state.config) = settings.to_detector_config();
+    *crate::state::lock_or_recover(&state.close_to_tray) = settings.close_to_tray;
+    *crate::state::lock_or_recover(&state.notify_lag) = settings.notify_lag;
     // 事件库保留条数(改小时顺带立刻裁剪一次,不必等下次写入)
     let _ = state.db.set_retain_rows(settings.retain_rows);
 

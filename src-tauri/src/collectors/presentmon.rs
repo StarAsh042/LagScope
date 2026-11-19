@@ -60,7 +60,7 @@ impl PresentMonWatch {
             Ok(mut child) => {
                 let stdout = child.stdout.take().expect("piped stdout");
                 watch.available.store(true, Ordering::Relaxed);
-                *watch.child.lock().unwrap() = Some(child);
+                *crate::state::lock_or_recover(&watch.child) = Some(child);
 
                 let latest = watch.latest.clone();
                 let available = watch.available.clone();

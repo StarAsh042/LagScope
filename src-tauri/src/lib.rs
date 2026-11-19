@@ -143,7 +143,7 @@ pub fn run() {
             // 关窗到托盘:由设置控制,进程保持后台采集
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.app_handle().state::<Arc<AppState>>();
-                if *state.close_to_tray.lock().unwrap() {
+                if *crate::state::lock_or_recover(&state.close_to_tray) {
                     api.prevent_close();
                     let _ = window.hide();
                 }

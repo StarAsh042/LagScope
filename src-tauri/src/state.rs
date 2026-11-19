@@ -10,6 +10,11 @@ use crate::collectors::{DiskInfo, MetricSample, NicIo, ProcessInfo, VolumeIo};
 use crate::engine::DetectorConfig;
 use crate::store::Db;
 
+/// 锁中毒时恢复内部值继续运行:状态锁只保护数据,不应因一次 panic 让整个采集/命令链路停摆。
+pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub struct AppState {
     /// sysinfo System(采集线程刷新,kill 命令借用)
     pub sys: Mutex<System>,
