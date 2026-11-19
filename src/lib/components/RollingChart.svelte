@@ -120,7 +120,10 @@
 </script>
 
 <div class="chart-card">
-  <div class="title">{title}</div>
+  <div class="title">
+    <span>{title}</span>
+    <span class="hint" title="拖拽框选放大时间轴，双击还原">拖拽缩放 · 双击还原</span>
+  </div>
   <div class="plot" bind:this={el}></div>
 </div>
 
@@ -134,11 +137,27 @@
     flex-direction: column;
     gap: var(--space-4);
     min-width: 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .chart-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
   }
   .title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
     font-size: var(--font-sm);
     font-weight: var(--weight-bold);
     color: var(--text-dim);
+  }
+  .title .hint {
+    font-size: var(--font-2xs);
+    font-weight: var(--weight-normal);
+    color: var(--text-dim);
+    opacity: 0.55;
+    white-space: nowrap;
   }
   .plot {
     width: 100%;
@@ -165,12 +184,12 @@
     font-variant-numeric: tabular-nums;
   }
   .plot :global(.u-cursor-x) {
-    border-right: 1px dashed rgba(59, 108, 212, 0.85);
+    border-right: 1px dashed color-mix(in srgb, var(--accent) 85%, transparent);
   }
   .plot :global(.u-select) {
-    background: rgba(59, 108, 212, 0.16);
-    border-left: 1px solid rgba(59, 108, 212, 0.5);
-    border-right: 1px solid rgba(59, 108, 212, 0.5);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+    border-right: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   }
   .plot :global(.u-cursor-pt) {
     border-width: 0;

@@ -2,11 +2,15 @@
   import { onMount } from "svelte";
 
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
 
   import ErrorBoundary from "$lib/components/ErrorBoundary.svelte";
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
+  import Icon from "$lib/components/Icon.svelte";
+  import IoBreakdown from "$lib/components/IoBreakdown.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
@@ -28,7 +32,9 @@
   import { levelColor, token } from "$lib/theme";
   import type { MetricSample } from "$lib/types";
 
-  let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
+  let tab = $state<"dashboard" | "events" | "startup" | "logs" | "settings">("dashboard");
+  let maximized = $state(false);
+  const appWindow = getCurrentWindow();
 
   /** 兜底界面里显示出错的是哪一块,避免用户以为整个程序挂了 */
   const tabLabel = $derived(
@@ -38,7 +44,9 @@
         ? "卡顿事件"
         : tab === "startup"
           ? "启动项"
-          : "设置"
+          : tab === "logs"
+            ? "运行日志"
+            : "设置"
   );
 
   // macOS 上主修饰键是 Cmd,提示文案跟着平台走
@@ -58,12 +66,17 @@
   }
 
   onMount(() => {
+    void appWindow.isMaximized().then((v) => (maximized = v));
+    let unlistenResize: (() => void) | null = null;
+    void appWindow.onResized(() => appWindow.isMaximized().then((v) => (maximized = v)))
+      .then((fn) => (unlistenResize = fn));
     void startMetrics();
     void startLagEvents();
 
     // 主窗口与迷你窗是两个路由页面,来回切换会重新挂载本组件;
     // 不撤掉轮询,每切一次就多一套 2s/30s 定时器与事件监听。
     return () => {
+      unlistenResize?.();
       stopMetrics();
       stopLagEvents();
     };
@@ -133,7 +146,7 @@
   // 帧监测(PresentMon):渲染大户的每秒帧统计
   const gameSub = $derived(
     metrics.game
-      ? `${metrics.game.app} · 卡帧 ${metrics.game.stutters}`
+      ? `${metrics.game.app} · 掉帧 ${metrics.game.stutters}`
       : "无渲染活动"
   );
   const gameData = $derived(
@@ -165,18 +178,18 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main>
-  <header>
+  <header data-tauri-drag-region="deep">
     <div class="brand">
-      <h1>LagScope <span class="zh">卡顿透视</span></h1>
+      <h1><Icon name="pulse" size={20} /> LagScope <span class="zh">卡顿透视</span></h1>
       <nav>
         <button
           class:active={tab === "dashboard"}
           onclick={() => (tab = "dashboard")}
         >
-          仪表盘
+          <Icon name="dashboard" /> 仪表盘
         </button>
         <button class:active={tab === "events"} onclick={() => (tab = "events")}>
-          卡顿事件
+          <Icon name="events" /> 卡顿事件
           {#if lagEvents.list.length}
             <span class="badge">{lagEvents.list.length}</span>
           {/if}
@@ -185,14 +198,17 @@
           class:active={tab === "startup"}
           onclick={() => (tab = "startup")}
         >
-          启动项
+          <Icon name="startup" /> 启动项
+        </button>
+        <button class:active={tab === "logs"} onclick={() => (tab = "logs")}>
+          <Icon name="logs" /> 日志
         </button>
         <button
           class:active={tab === "settings"}
           onclick={() => (tab = "settings")}
           title={settingsTitle}
         >
-          设置
+          <Icon name="settings" /> 设置
         </button>
       </nav>
     </div>
@@ -203,11 +219,22 @@
         </button>
       {/if}
       <button class="mini-toggle" onclick={() => invoke("toggle_mini")}>
-        悬浮窗
+        <Icon name="mini" /> 悬浮窗
       </button>
       <span class="status" class:on={metrics.connected}>
-        {metrics.connected ? "● 采集中" : "○ 连接中…"}
+        <span class="dot"></span>{metrics.connected ? "采集中" : "连接中…"}
       </span>
+      <div class="window-controls">
+        <button title="最小化" data-tauri-drag-region="false" onclick={() => void appWindow.minimize()}>
+          <Icon name="minimize" size={13} />
+        </button>
+        <button title={maximized ? "还原" : "最大化"} data-tauri-drag-region="false" onclick={() => void appWindow.toggleMaximize()}>
+          <Icon name={maximized ? "restore" : "maximize"} size={12} />
+        </button>
+        <button class="quit" title="关闭" data-tauri-drag-region="false" onclick={() => void appWindow.close()}>
+          <Icon name="close" size={12} />
+        </button>
+      </div>
     </div>
   </header>
 
@@ -315,12 +342,12 @@
       />
     {/if}
     <RollingChart
-      title="DPC / 硬缺页(次·页/秒)"
+      title="DPC / 内存换页(次·页/秒)"
       data={chartData((s) => [s.dpcPerSec, s.pageInputPerSec])}
       unit="/s"
       series={[
         { label: "DPC/s", color: token("--chart-dpc", "#e5484d") },
-        { label: "硬缺页/s", color: token("--chart-page-fault", "#f5a623") },
+        { label: "内存换页/s", color: token("--chart-page-fault", "#f5a623") },
       ]}
     />
     {#if metrics.gameHistory.length}
@@ -335,6 +362,8 @@
       />
     {/if}
   </section>
+
+  <IoBreakdown io={metrics.io} />
 
   <ProcessTable processes={metrics.processes} />
 
@@ -354,6 +383,8 @@
     </div>
   {:else if tab === "startup"}
     <StartupPanel />
+  {:else if tab === "logs"}
+    <LogViewer />
   {:else}
     <SettingsPanel />
   {/if}
@@ -375,6 +406,32 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin: -12px -16px 0;
+    padding: 12px 16px 0;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, var(--panel-alt)), transparent);
+  }
+  .window-controls {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .window-controls button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .window-controls button:hover {
+    background: var(--panel-alt);
+    color: var(--text);
+  }
+  .window-controls button.quit:hover {
+    background: var(--err);
+    color: var(--on-accent);
   }
   .brand {
     display: flex;
@@ -382,6 +439,9 @@
     gap: var(--space-20);
   }
   h1 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
     font-size: var(--font-xl);
     margin: 0;
     letter-spacing: 0.5px;
@@ -397,6 +457,9 @@
     gap: var(--space-6);
   }
   nav button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-dim);
@@ -446,6 +509,9 @@
     cursor: default;
   }
   .mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text-dim);
@@ -459,8 +525,18 @@
     border-color: var(--accent);
   }
   .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: var(--font-sm);
     color: var(--text-dim);
+  }
+  .status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
   }
   .status.on {
     color: var(--ok);

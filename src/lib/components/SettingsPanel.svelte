@@ -29,7 +29,15 @@
     enableFrameMonitor: boolean;
     enableDpcWatch: boolean;
     notifyLag: boolean;
+    miniWidth: number;
+    miniHeight: number;
+    miniX: number;
+    miniY: number;
+    miniOpacity: number;
+    miniMetrics: string[];
   }
+
+  const MINI_METRICS = ["CPU", "内存", "GPU", "磁盘", "网络", "帧率"];
 
   let s = $state<Settings | null>(null);
   let saving = $state(false);
@@ -74,12 +82,27 @@
     };
   });
 
+  let miniOpacityPercent = $state(100);
+
+  $effect(() => {
+    if (s) miniOpacityPercent = Math.round((s.miniOpacity || 1) * 100);
+  });
+
+  function toggleMetric(metric: string) {
+    if (!s) return;
+    const values = s.miniMetrics.includes(metric)
+      ? s.miniMetrics.filter((v) => v !== metric)
+      : [...s.miniMetrics, metric];
+    s = { ...s, miniMetrics: values };
+  }
+
   async function save() {
     if (!s) return;
     saving = true;
     saved = false;
     errMsg = "";
     try {
+      s.miniOpacity = Math.min(1, Math.max(0.3, miniOpacityPercent / 100));
       await invoke("set_settings", { settings: s });
       saved = true;
       if (savedTimer) clearTimeout(savedTimer);
@@ -116,11 +139,11 @@
         <input type="number" min="50" max="100" bind:value={s.commitPct} />
       </label>
       <label>
-        <span>硬缺页阈值 页/秒</span>
+        <span>内存换页阈值 页/秒</span>
         <input type="number" min="100" max="5000" bind:value={s.pageInput} />
       </label>
       <label>
-        <span>硬缺页持续秒数</span>
+        <span>内存换页持续秒数</span>
         <input type="number" min="2" max="60" bind:value={s.pageSustainS} />
       </label>
       <label>
@@ -174,6 +197,32 @@
     </div>
 
     <div class="group">
+      <div class="gtitle">悬浮窗</div>
+      <label>
+        <span>宽度 px</span>
+        <input type="number" min="160" max="900" bind:value={s.miniWidth} />
+      </label>
+      <label>
+        <span>高度 px</span>
+        <input type="number" min="64" max="600" bind:value={s.miniHeight} />
+      </label>
+      <label>
+        <span>透明度 %</span>
+        <input type="range" min="30" max="100" bind:value={miniOpacityPercent} />
+      </label>
+      <div class="metric-picks">
+        <span class="pick-title">显示指标</span>
+        {#each MINI_METRICS as metric}
+          <label class="check">
+            <input type="checkbox" checked={s.miniMetrics.includes(metric)} onchange={() => toggleMetric(metric)} />
+            <span>{metric}</span>
+          </label>
+        {/each}
+      </div>
+      <p class="hint">位置由悬浮窗拖动决定;双击悬浮窗返回主窗口。</p>
+    </div>
+
+    <div class="group">
       <div class="gtitle">行为</div>
       <label class="check">
         <input type="checkbox" bind:checked={s.closeToTray} />
@@ -185,7 +234,7 @@
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={s.enableFrameMonitor} />
-        <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
+        <span>渲染帧监测(PresentMon,检测帧率骤降与帧间隔尖峰)</span>
         {#if monitor?.frameEnabled}
           <span class="state-badge" class:on={monitor.frameActive}>
             {monitor.frameActive ? "● 运行中" : "○ 已停止"}
@@ -321,5 +370,28 @@
   }
   .state-badge.on {
     color: var(--ok);
+  }
+  input[type="range"] {
+    width: 110px;
+    accent-color: var(--accent);
+  }
+  .metric-picks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .pick-title {
+    font-size: var(--font-sm);
+    color: var(--text-dim);
+    width: 100%;
+  }
+  .metric-picks label {
+    font-size: var(--font-sm);
+  }
+  .hint {
+    margin: 0;
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
 </style>

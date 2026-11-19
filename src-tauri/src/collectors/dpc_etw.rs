@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::engine::DpcSample;
+use crate::logging;
 use ferrisetw::native::EvntraceNativeError;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
@@ -65,15 +66,33 @@ impl ModuleTable {
                 return Self { modules: mods };
             }
 
-            let count = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
+            let count = buf
+                .get(0..4)
+                .and_then(|s| <[u8; 4]>::try_from(s).ok())
+                .map(|a| u32::from_le_bytes(a) as usize)
+                .unwrap_or(0);
+            if count == 0 {
+                return Self { modules: mods };
+            }
             let usable = (buf.len() - ENTRY_HDR) / STRIDE;
             let count = count.min(usable);
             for i in 0..count {
                 let off = ENTRY_HDR + i * STRIDE;
-                let image_base = u64::from_le_bytes(buf[off + 16..off + 24].try_into().unwrap());
+                let Some(image_base) = buf
+                    .get(off + 16..off + 24)
+                    .and_then(|s| <[u8; 8]>::try_from(s).ok())
+                    .map(u64::from_le_bytes)
+                else {
+                    continue;
+                };
                 // ImageSize 是 u32,与 ImageBase 相邻(+24..28)
-                let image_size =
-                    u32::from_le_bytes(buf[off + 24..off + 28].try_into().unwrap()) as u64;
+                let Some(image_size) = buf
+                    .get(off + 24..off + 28)
+                    .and_then(|s| <[u8; 4]>::try_from(s).ok())
+                    .map(|a| u32::from_le_bytes(a) as u64)
+                else {
+                    continue;
+                };
                 // 完整路径文本(\SystemRoot\...),以 NUL 截断
                 let path_buf = &buf[off + 40..off + STRIDE];
                 let path_end = path_buf
@@ -234,7 +253,7 @@ impl DpcWatch {
                         let _ = trace.stop();
                     }
                     Err(e) => {
-                        eprintln!("[dpc-etw] 内核会话创建失败(需管理员): {e:?}");
+                        logging::error("dpc-etw", format!("内核会话创建失败(需管理员): {e:?}"));
                         *error.lock().unwrap_or_else(|p| p.into_inner()) =
                             Some(describe_start_error(&e));
                     }

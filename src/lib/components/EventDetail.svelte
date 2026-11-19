@@ -96,7 +96,7 @@
           : "--"}
         %
       </span>
-      <span>硬缺页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
+      <span>内存换页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
       <span>
         磁盘延迟 {(ev.counters.diskAvgSecTransfer * 1000).toFixed(1)} ms
       </span>
@@ -134,7 +134,7 @@
 
     {#if ev.game}
       <div class="section">
-        <div class="stitle">帧统计({ev.game.app})</div>
+        <div class="stitle">渲染帧统计({ev.game.app})</div>
         <div class="line">
           FPS {ev.game.fps} · 平均帧间隔 {ev.game.avgGapMs.toFixed(1)} ms · 最大
           {ev.game.maxGapMs.toFixed(1)} ms · 卡帧 {ev.game.stutters} 次

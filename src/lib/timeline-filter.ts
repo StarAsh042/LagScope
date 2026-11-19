@@ -59,7 +59,7 @@ export function matchesRange(
   return nowMs - tsMs <= opt.spanMs;
 }
 
-/** 事件的可搜索文本:时间、原因(中英文)、归因详情、Top 进程、挂起窗口、游戏与 DPC 驱动 */
+/** 事件的可搜索文本:时间、原因(中英文)、归因详情、Top 进程、挂起窗口、渲染进程与 DPC 驱动 */
 export function eventSearchText(
   ev: LagEvent,
   kindLabel: (kind: string) => string,

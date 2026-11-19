@@ -41,6 +41,9 @@ jobs:
       - name: Frontend type check
         run: npm run check
 
+      - name: Frontend unit tests
+        run: npm test
+
       - name: Build MSI
         run: npm run tauri build -- --bundles msi
 

@@ -41,6 +41,19 @@ pub struct Settings {
     pub enable_dpc_watch: bool,
     /// 检测到卡顿时弹系统通知
     pub notify_lag: bool,
+    // 悬浮窗自定义
+    /// 悬浮窗宽度(px)
+    pub mini_width: f64,
+    /// 悬浮窗高度(px)
+    pub mini_height: f64,
+    /// 悬浮窗左上角 X(屏幕物理像素);负数表示未设置,由系统定位
+    pub mini_x: i32,
+    /// 悬浮窗左上角 Y(屏幕物理像素);负数表示未设置
+    pub mini_y: i32,
+    /// 悬浮窗整体透明度 0.3–1.0
+    pub mini_opacity: f64,
+    /// 悬浮窗展示的指标 key 列表
+    pub mini_metrics: Vec<String>,
 }
 
 impl Default for Settings {
@@ -66,6 +79,19 @@ impl Default for Settings {
             enable_frame_monitor: true,
             enable_dpc_watch: true,
             notify_lag: true,
+            mini_width: 300.0,
+            mini_height: 96.0,
+            mini_x: -1,
+            mini_y: -1,
+            mini_opacity: 1.0,
+            mini_metrics: vec![
+                "CPU".into(),
+                "内存".into(),
+                "GPU".into(),
+                "磁盘".into(),
+                "网络".into(),
+                "帧率".into(),
+            ],
         }
     }
 }
@@ -81,6 +107,31 @@ fn positive_or(v: f64, fallback: f64) -> f64 {
 }
 
 impl Settings {
+    /// 悬浮窗尺寸:手改配置后夹到合理范围,避免窗口不可见
+    pub fn mini_size(&self) -> (f64, f64) {
+        (
+            if self.mini_width.is_finite() {
+                self.mini_width.clamp(160.0, 900.0)
+            } else {
+                300.0
+            },
+            if self.mini_height.is_finite() {
+                self.mini_height.clamp(64.0, 600.0)
+            } else {
+                96.0
+            },
+        )
+    }
+
+    /// 悬浮窗位置:两轴都 >= 0 才视为有效
+    pub fn mini_position(&self) -> Option<(i32, i32)> {
+        if self.mini_x >= 0 && self.mini_y >= 0 {
+            Some((self.mini_x, self.mini_y))
+        } else {
+            None
+        }
+    }
+
     pub fn to_detector_config(&self) -> DetectorConfig {
         let d = DetectorConfig::default();
         DetectorConfig {
@@ -125,6 +176,24 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
     Ok(load_settings(&app))
 }
 
+/// 保存悬浮窗拖动后的位置(只写位置,不触发检测器/自启等热更新)
+#[tauri::command]
+pub fn save_mini_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let store = open_store(&app)?;
+    let mut settings = store
+        .get(STORE_KEY)
+        .and_then(|v| serde_json::from_value::<Settings>(v.clone()).ok())
+        .unwrap_or_default();
+    settings.mini_x = x;
+    settings.mini_y = y;
+    let value = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
+    store.set(STORE_KEY, value);
+    store
+        .save()
+        .map_err(|e| format!("保存悬浮窗位置失败: {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_settings(
     app: AppHandle,
@@ -138,9 +207,9 @@ pub fn set_settings(
     store.save().map_err(|e| format!("保存设置失败: {e}"))?;
 
     // 热更新检测器
-    *state.config.lock().unwrap() = settings.to_detector_config();
-    *state.close_to_tray.lock().unwrap() = settings.close_to_tray;
-    *state.notify_lag.lock().unwrap() = settings.notify_lag;
+    *crate::state::lock_or_recover(&state.config) = settings.to_detector_config();
+    *crate::state::lock_or_recover(&state.close_to_tray) = settings.close_to_tray;
+    *crate::state::lock_or_recover(&state.notify_lag) = settings.notify_lag;
     // 事件库保留条数(改小时顺带立刻裁剪一次,不必等下次写入)
     let _ = state.db.set_retain_rows(settings.retain_rows);
 
@@ -166,6 +235,9 @@ pub fn set_settings(
             .disable()
             .map_err(|e| format!("关闭自启失败: {e}"))?;
     }
+
+    // 悬浮窗尺寸/位置热更新(位置未设置时只调尺寸)
+    crate::commands::apply_mini_window(&app, &settings);
     Ok(())
 }
 
@@ -292,5 +364,52 @@ mod tests {
             assert_eq!(c.dpc_total_threshold, d.dpc_total_threshold, "dpc={bad}");
             assert!(c.interrupt_sustain_s >= 1, "持续秒数至少 1");
         }
+    }
+
+    /// 旧版 settings.json 没有悬浮窗字段时,必须回落到默认配置而不是整份丢失
+    #[test]
+    fn legacy_settings_without_mini_fields_uses_defaults() {
+        let legacy = serde_json::json!({
+            "cpuPct": 70.0,
+            "cpuSustainS": 8,
+            "notifyLag": false
+        });
+        let s: Settings = serde_json::from_value(legacy).expect("旧设置应能反序列化");
+        assert_eq!(s.cpu_pct, 70.0, "已有字段必须原样保留");
+        assert!(!s.notify_lag);
+        let d = Settings::default();
+        assert_eq!(s.mini_width, d.mini_width);
+        assert_eq!(s.mini_height, d.mini_height);
+        assert_eq!(s.mini_opacity, d.mini_opacity);
+        assert_eq!(s.mini_metrics, d.mini_metrics);
+        assert_eq!(s.mini_position(), None);
+    }
+
+    /// 悬浮窗字段必须原样透传;异常数值/坐标在应用时夹到合法范围
+    #[test]
+    fn mini_fields_roundtrip_and_sanitize() {
+        let s = Settings {
+            mini_width: 1234.0,
+            mini_height: 1.0, // 低于下限,应用时应夹到 64
+            mini_x: -5,
+            mini_y: 20,
+            mini_opacity: 9.0,
+            mini_metrics: vec!["CPU".into(), "帧率".into()],
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&s).expect("序列化应成功");
+        assert!(json.contains("\"miniWidth\""), "字段名须为 camelCase");
+        let back: Settings = serde_json::from_str(&json).expect("反序列化应成功");
+        assert_eq!(back.mini_width, 1234.0);
+        assert_eq!(
+            back.mini_metrics,
+            vec!["CPU".to_string(), "帧率".to_string()]
+        );
+        assert!((back.mini_size().0 - 900.0).abs() < f64::EPSILON);
+        assert!(
+            (back.mini_size().1 - 64.0).abs() < f64::EPSILON,
+            "越界高度夹到下限 64"
+        );
+        assert_eq!(back.mini_position(), None, "X 为负时位置无效");
     }
 }

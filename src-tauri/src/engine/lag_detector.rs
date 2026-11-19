@@ -16,9 +16,9 @@ pub struct DetectorConfig {
     pub cpu_sustain_s: u64,
     /// 提交内存占比阈值 %
     pub commit_pct: f64,
-    /// 硬缺页速率阈值 页/秒
+    /// 内存换页速率阈值 页/秒
     pub page_input: f64,
-    /// 硬缺页需持续秒数(独立于 CPU 阈值,避免改 CPU 设置串扰内存告警)
+    /// 内存换页需持续秒数(独立于 CPU 阈值,避免改 CPU 设置串扰内存告警)
     pub page_sustain_s: u64,
     /// 提交内存需持续秒数(独立于磁盘阈值)
     pub mem_sustain_s: u64,
@@ -309,7 +309,7 @@ impl LagDetector {
             reasons.push(LagReason {
                 kind: "page_faults".into(),
                 detail: format!(
-                    "硬缺页 {v:.0} 页/秒 持续 {} 秒(内存不足)",
+                    "内存换页 {v:.0} 页/秒 持续 {} 秒(内存不足)",
                     cfg.page_sustain_s
                 ),
                 value: v,
@@ -621,7 +621,7 @@ mod tests {
         }
     }
 
-    /// 回归:硬缺页的持续时间必须走 page_sustain_s,不能复用 cpu_sustain_s。
+    /// 回归:内存换页的持续时间必须走 page_sustain_s,不能复用 cpu_sustain_s。
     #[test]
     fn page_faults_use_own_sustain_window() {
         let cfg = DetectorConfig {
@@ -718,6 +718,63 @@ mod tests {
             }
         }
         assert!(!cpu_fired_early, "CPU 30 秒窗口未满,不应因 CPU 触发事件");
+    }
+
+    /// 回归:sustained 要求窗口内每个样本都满足谓词,任一样本跌破即不触发。
+    #[test]
+    fn sustained_requires_all_samples_match() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 3,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        // 交替高低:任何 3 秒窗口里必有一个样本跌破阈值,始终不应触发
+        for i in 0..8u64 {
+            let cpu = if i % 2 == 0 { 95.0 } else { 10.0 };
+            assert!(
+                det.feed(&sample(base + i * 1000, cpu), &[], &[], None, None, &cfg)
+                    .is_none(),
+                "窗口内有一个样本不满足即不应触发"
+            );
+        }
+    }
+
+    /// sustained 只覆盖最近 N 秒;窗口外的早期满载不应算数。
+    #[test]
+    fn sustained_uses_only_recent_window() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 3,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        // 先喂 5 秒满载,再喂 5 秒低负载,最近 3 秒窗口内应全为低负载
+        for i in 0..5u64 {
+            det.feed(&sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg);
+        }
+        for i in 5..10u64 {
+            assert!(
+                det.feed(&sample(base + i * 1000, 10.0), &[], &[], None, None, &cfg)
+                    .is_none(),
+                "最近窗口内已非满载,不应触发"
+            );
+        }
+    }
+
+    /// 回归:窗口内样本不足 2 个时 sustained 返回 None(边界)。
+    #[test]
+    fn sustained_needs_at_least_two_samples() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 1,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        assert!(
+            det.feed(&sample(1_793_000_000_000, 95.0), &[], &[], None, None, &cfg)
+                .is_none(),
+            "仅一个样本不足以判定持续过载"
+        );
     }
 
     fn proc(pid: u32, cpu: f32, mem: f64, disk: f64) -> ProcessInfo {

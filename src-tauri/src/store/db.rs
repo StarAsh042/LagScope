@@ -66,7 +66,7 @@ impl Db {
     }
 
     pub fn insert_event(&self, e: &LagEvent) -> Result<i64, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         conn.execute(
             "INSERT INTO lag_events
              (ts_ms, reasons_json, counters_json, top_cpu_json, top_mem_json, top_disk_json, hung_windows_json, game_json, dpc_json)
@@ -116,21 +116,21 @@ impl Db {
     pub fn set_retain_rows(&self, retain_rows: u32) -> Result<usize, String> {
         let retain_rows = retain_rows.max(1);
         self.retain_rows.store(retain_rows, Ordering::Relaxed);
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         prune_inner(&conn, retain_rows)
     }
 
     /// 立即执行一次保留清理,返回删除行数(仅测试用:长跑由 insert_event 自动触发)
     #[cfg(test)]
     pub fn prune(&self) -> Result<usize, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         prune_inner(&conn, self.retain_rows.load(Ordering::Relaxed))
     }
 
     /// 当前事件条数(仅测试用,故不进 lib 构建)
     #[cfg(test)]
     pub fn count_events(&self) -> Result<u32, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         conn.query_row("SELECT COUNT(*) FROM lag_events", [], |row| row.get(0))
             .map_err(|err| format!("统计事件条数失败: {err}"))
     }
@@ -143,7 +143,7 @@ impl Db {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         let mut removed = 0;
         for id in ids {
             removed += conn
@@ -157,7 +157,7 @@ impl Db {
     }
 
     pub fn list_events(&self, limit: u32) -> Result<Vec<LagEvent>, String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = crate::state::lock_or_recover(&self.conn);
         let mut stmt = conn
             .prepare(
                 "SELECT id, ts_ms, reasons_json, counters_json,
@@ -247,7 +247,7 @@ mod tests {
             ts_ms: 1_700_000_000_000,
             reasons: vec![LagReason {
                 kind: "page_faults".into(),
-                detail: "硬缺页".into(),
+                detail: "内存换页".into(),
                 value: 512.0,
             }],
             counters: MetricSample {

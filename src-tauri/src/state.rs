@@ -6,9 +6,14 @@ use sysinfo::System;
 
 use crate::collectors::dpc_etw::DpcWatch;
 use crate::collectors::presentmon::PresentMonWatch;
-use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::collectors::{DiskInfo, MetricSample, NicIo, ProcessInfo, VolumeIo};
 use crate::engine::DetectorConfig;
 use crate::store::Db;
+
+/// 锁中毒时恢复内部值继续运行:状态锁只保护数据,不应因一次 panic 让整个采集/命令链路停摆。
+pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 pub struct AppState {
     /// sysinfo System(采集线程刷新,kill 命令借用)
@@ -24,6 +29,10 @@ pub struct AppState {
     pub last_sample: Mutex<Option<Arc<MetricSample>>>,
     /// 磁盘静态容量(30s 更新)
     pub disks: Mutex<Vec<DiskInfo>>,
+    /// 每磁盘卷读写速率(1Hz 更新)
+    pub volumes: Mutex<Vec<VolumeIo>>,
+    /// 每网卡收发速率(1Hz 更新)
+    pub nics: Mutex<Vec<NicIo>>,
     /// 卡顿事件库
     pub db: Db,
     /// 检测阈值(设置页热更新)
@@ -46,6 +55,8 @@ impl AppState {
             processes: Mutex::new(Arc::new(Vec::new())),
             last_sample: Mutex::new(None),
             disks: Mutex::new(Vec::new()),
+            volumes: Mutex::new(Vec::new()),
+            nics: Mutex::new(Vec::new()),
             db,
             config: Mutex::new(config),
             close_to_tray: Mutex::new(close_to_tray),

@@ -11,8 +11,9 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::collectors::hung_window;
 use crate::collectors::presentmon::PresentMonWatch;
-use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::collectors::{DiskInfo, IoBreakdown, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
+use crate::logging;
 use crate::state::AppState;
 use crate::store::export::{self, ExportFormat};
 
@@ -36,23 +37,14 @@ pub struct MonitorStatus {
 /// 查询监测器运行状态
 #[tauri::command]
 pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> MonitorStatus {
-    let frame = state
-        .frame_monitor
-        .lock()
-        .unwrap()
+    let frame = crate::state::lock_or_recover(&state.frame_monitor)
         .as_ref()
         .map(|w| w.is_available());
-    let dpc = state
-        .dpc_watch
-        .lock()
-        .unwrap()
+    let dpc = crate::state::lock_or_recover(&state.dpc_watch)
         .as_ref()
         .map(|w| w.is_available());
     // 只在"开了但没跑起来"时才有值:跑成功了这条原因就该消失
-    let dpc_error = state
-        .dpc_watch
-        .lock()
-        .unwrap()
+    let dpc_error = crate::state::lock_or_recover(&state.dpc_watch)
         .as_ref()
         .and_then(|w| w.last_error());
     MonitorStatus {
@@ -74,7 +66,7 @@ pub fn set_frame_monitor(
     enable: bool,
     stutter_gap_ms: f64,
 ) {
-    let mut fm = state.frame_monitor.lock().unwrap();
+    let mut fm = crate::state::lock_or_recover(&state.frame_monitor);
     if enable {
         match fm.as_ref() {
             // 已在运行:只热更新阈值,不重启子进程
@@ -86,8 +78,11 @@ pub fn set_frame_monitor(
                 Ok(p) if p.exists() => {
                     *fm = Some(PresentMonWatch::start(&p, stutter_gap_ms));
                 }
-                Ok(p) => eprintln!("[presentmon] 未找到 PresentMon.exe: {}", p.display()),
-                Err(e) => eprintln!("[presentmon] 解析资源路径失败: {e}"),
+                Ok(p) => logging::warn(
+                    "presentmon",
+                    format!("未找到 PresentMon.exe: {}", p.display()),
+                ),
+                Err(e) => logging::warn("presentmon", format!("解析资源路径失败: {e}")),
             },
         }
     } else {
@@ -98,7 +93,7 @@ pub fn set_frame_monitor(
 
 /// 启动/停止 ETW DPC 归因(设置开关与启动流程共用)
 pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
-    let mut dw = state.dpc_watch.lock().unwrap();
+    let mut dw = crate::state::lock_or_recover(&state.dpc_watch);
     if enable {
         if dw.is_none() {
             *dw = Some(crate::collectors::dpc_etw::DpcWatch::start());
@@ -106,6 +101,24 @@ pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
     } else {
         // Drop:停止标志 → 会话线程结束 trace
         *dw = None;
+    }
+}
+
+/// 把设置里的悬浮窗尺寸/位置应用到当前窗口(保存设置与启动时共用)
+///
+/// 位置两轴任一为负表示"未设置",只更新尺寸;窗口不存在时静默跳过。
+pub fn apply_mini_window(app: &AppHandle, settings: &crate::settings::Settings) {
+    let Some(w) = app.get_webview_window("mini") else {
+        return;
+    };
+    let (width, height) = settings.mini_size();
+    if let Err(e) = w.set_size(tauri::LogicalSize { width, height }) {
+        logging::warn("mini", format!("调整悬浮窗尺寸失败: {e}"));
+    }
+    if let Some((x, y)) = settings.mini_position()
+        && let Err(e) = w.set_position(tauri::PhysicalPosition { x, y })
+    {
+        logging::warn("mini", format!("调整悬浮窗位置失败: {e}"));
     }
 }
 
@@ -124,16 +137,21 @@ pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
         // 理论上不会走到(setup 已预创建);兜底再建一次
         None => {
             use tauri::WebviewUrl;
-            tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
+            let settings = crate::settings::load_settings(&app);
+            let (width, height) = settings.mini_size();
+            let w = tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
                 .title("LagScope 悬浮窗")
-                .inner_size(300.0, 96.0)
+                .inner_size(width, height)
                 .decorations(false)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(false)
                 .build()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string())?;
+            if let Some((x, y)) = settings.mini_position() {
+                let _ = w.set_position(tauri::PhysicalPosition { x, y });
+            }
+            Ok(())
         }
     }
 }
@@ -164,25 +182,34 @@ pub fn show_main(app: AppHandle) -> Result<(), String> {
 pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Arc<Vec<ProcessInfo>> {
     // 直接返回共享快照的 Arc:进程表每 2s 拉一次,深拷贝 300 个 ProcessInfo
     // (每个含一次 String 分配)纯属浪费,序列化时按引用读取即可
-    state.processes.lock().unwrap().clone()
+    crate::state::lock_or_recover(&state.processes).clone()
 }
 
 /// 最新系统采样
 #[tauri::command]
 pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<Arc<MetricSample>> {
-    state.last_sample.lock().unwrap().clone()
+    crate::state::lock_or_recover(&state.last_sample).clone()
 }
 
 /// 磁盘静态容量
 #[tauri::command]
 pub fn get_disks(state: State<'_, std::sync::Arc<AppState>>) -> Vec<DiskInfo> {
-    state.disks.lock().unwrap().clone()
+    crate::state::lock_or_recover(&state.disks).clone()
+}
+
+/// 每磁盘卷与每网卡的实时 I/O 速率(1Hz 更新,前端按需轮询)
+#[tauri::command]
+pub fn get_io_breakdown(state: State<'_, std::sync::Arc<AppState>>) -> IoBreakdown {
+    IoBreakdown {
+        volumes: crate::state::lock_or_recover(&state.volumes).clone(),
+        nics: crate::state::lock_or_recover(&state.nics).clone(),
+    }
 }
 
 /// 结束进程(对应任务管理器的"结束任务")
 #[tauri::command]
 pub fn kill_process(state: State<'_, std::sync::Arc<AppState>>, pid: u32) -> Result<bool, String> {
-    let mut sys = state.sys.lock().unwrap();
+    let mut sys = crate::state::lock_or_recover(&state.sys);
     // 先补一次进程列表,保证目标进程可见
     sys.refresh_processes(
         sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
@@ -263,25 +290,16 @@ pub fn run_diagnose(
     app: &tauri::AppHandle,
     state: &std::sync::Arc<AppState>,
 ) -> Result<LagEvent, String> {
-    let counters = state
-        .last_sample
-        .lock()
-        .unwrap()
+    let counters = crate::state::lock_or_recover(&state.last_sample)
         .clone()
         .map(Arc::unwrap_or_clone)
         .ok_or_else(|| "暂无采样数据".to_string())?;
-    let processes = Arc::unwrap_or_clone(state.processes.lock().unwrap().clone());
+    let processes = Arc::unwrap_or_clone(crate::state::lock_or_recover(&state.processes).clone());
     let hung = hung_window::detect_hung_windows();
-    let game = state
-        .frame_monitor
-        .lock()
-        .unwrap()
+    let game = crate::state::lock_or_recover(&state.frame_monitor)
         .as_ref()
         .and_then(|w| w.snapshot());
-    let dpc_top = state
-        .dpc_watch
-        .lock()
-        .unwrap()
+    let dpc_top = crate::state::lock_or_recover(&state.dpc_watch)
         .as_ref()
         .and_then(|w| w.snapshot());
     // 手动诊断只如实记录当前状态;若没有任何自动阈值命中,标记为 manual

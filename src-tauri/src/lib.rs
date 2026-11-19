@@ -4,6 +4,7 @@ mod admin;
 mod collectors;
 mod commands;
 mod engine;
+mod logging;
 mod notify;
 mod settings;
 mod startup;
@@ -56,6 +57,8 @@ pub fn run() {
             // 事件库:appdata/lagscope.db
             let data_dir = app.path().app_data_dir().expect("获取 appdata 目录失败");
             std::fs::create_dir_all(&data_dir).ok();
+            logging::init(&data_dir).ok();
+            logging::info("app", "LagScope 启动");
             let db = Db::open(&data_dir.join("lagscope.db")).expect("打开事件数据库失败");
 
             // 设置 → 检测阈值 / 关窗行为
@@ -72,15 +75,18 @@ pub fn run() {
             // 预创建悬浮迷你窗(隐藏):避免在 command 中创建窗口导致的渲染问题
             {
                 use tauri::WebviewUrl;
+                let (mini_w, mini_h) = settings.mini_size();
                 tauri::WebviewWindowBuilder::new(app, "mini", WebviewUrl::App("mini".into()))
                     .title("LagScope 悬浮窗")
-                    .inner_size(300.0, 96.0)
+                    .inner_size(mini_w, mini_h)
                     .decorations(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
                     .resizable(false)
                     .visible(false)
                     .build()?;
+                // 启动时应用已保存的位置(尺寸已在 builder 中设好)
+                commands::apply_mini_window(app.handle(), &settings);
             }
 
             // 帧监测(PresentMon):按设置启动
@@ -107,13 +113,13 @@ pub fn run() {
                     "show" => toggle_main_window(app),
                     "mini" => {
                         if let Err(e) = commands::toggle_mini(app.clone()) {
-                            eprintln!("[tray] 悬浮窗切换失败: {e}");
+                            logging::error("tray", format!("悬浮窗切换失败: {e}"));
                         }
                     }
                     "diagnose" => {
                         let state = app.state::<Arc<AppState>>();
                         if let Err(e) = commands::run_diagnose(app, &state) {
-                            eprintln!("[tray] 立即诊断失败: {e}");
+                            logging::error("tray", format!("立即诊断失败: {e}"));
                         }
                     }
                     "quit" => app.exit(0),
@@ -137,7 +143,7 @@ pub fn run() {
             // 关窗到托盘:由设置控制,进程保持后台采集
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.app_handle().state::<Arc<AppState>>();
-                if *state.close_to_tray.lock().unwrap() {
+                if *crate::state::lock_or_recover(&state.close_to_tray) {
                     api.prevent_close();
                     let _ = window.hide();
                 }
@@ -147,6 +153,7 @@ pub fn run() {
             commands::get_processes,
             commands::get_latest_sample,
             commands::get_disks,
+            commands::get_io_breakdown,
             commands::kill_process,
             commands::list_lag_events,
             commands::delete_lag_events,
@@ -158,10 +165,14 @@ pub fn run() {
             commands::get_monitor_status,
             commands::get_elevation,
             commands::relaunch_as_admin,
+            logging::get_logs,
+            logging::clear_logs,
+            logging::open_log_dir,
             startup::get_startup_items,
             startup::set_startup_enabled,
             settings::get_settings,
-            settings::set_settings
+            settings::set_settings,
+            settings::save_mini_position
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

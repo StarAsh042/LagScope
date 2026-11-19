@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::engine::{DetectorConfig, GameSample};
+use crate::logging;
 
 /// 每秒帧统计缓存 + 子进程句柄
 pub struct PresentMonWatch {
@@ -59,7 +60,7 @@ impl PresentMonWatch {
             Ok(mut child) => {
                 let stdout = child.stdout.take().expect("piped stdout");
                 watch.available.store(true, Ordering::Relaxed);
-                *watch.child.lock().unwrap() = Some(child);
+                *crate::state::lock_or_recover(&watch.child) = Some(child);
 
                 let latest = watch.latest.clone();
                 let available = watch.available.clone();
@@ -87,7 +88,7 @@ impl PresentMonWatch {
                 }
             }
             Err(e) => {
-                eprintln!("[presentmon] 启动失败: {e}");
+                logging::error("presentmon", format!("启动失败: {e}"));
             }
         }
         watch
