@@ -320,11 +320,25 @@ fn run_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
 
         // 每卷读写速率从 PDH 通配符计数器读取(_Total 实例不计入细分)
         if let Some(cs) = pdh_set.as_ref() {
-            let read_rates: HashMap<String, u64> = cs.disk_instance_read.as_ref()
-                .map(|c| cs.q.read_instances(c).into_iter().map(|(k, v)| (k, v.max(0.0) as u64)).collect())
+            let read_rates: HashMap<String, u64> = cs
+                .disk_instance_read
+                .as_ref()
+                .map(|c| {
+                    cs.q.read_instances(c)
+                        .into_iter()
+                        .map(|(k, v)| (k, v.max(0.0) as u64))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let write_rates: HashMap<String, u64> = cs.disk_instance_write.as_ref()
-                .map(|c| cs.q.read_instances(c).into_iter().map(|(k, v)| (k, v.max(0.0) as u64)).collect())
+            let write_rates: HashMap<String, u64> = cs
+                .disk_instance_write
+                .as_ref()
+                .map(|c| {
+                    cs.q.read_instances(c)
+                        .into_iter()
+                        .map(|(k, v)| (k, v.max(0.0) as u64))
+                        .collect()
+                })
                 .unwrap_or_default();
             let volumes: Vec<VolumeIo> = read_rates
                 .keys()
@@ -534,9 +548,20 @@ mod tests {
 
     #[test]
     fn io_breakdown_serializes_camel_case() {
-        let v = VolumeIo { mount: "C:".into(), read_bps: 1, write_bps: 2 };
-        let n = NicIo { name: "以太网".into(), rx_bps: 3, tx_bps: 4 };
-        let b = IoBreakdown { volumes: vec![v], nics: vec![n] };
+        let v = VolumeIo {
+            mount: "C:".into(),
+            read_bps: 1,
+            write_bps: 2,
+        };
+        let n = NicIo {
+            name: "以太网".into(),
+            rx_bps: 3,
+            tx_bps: 4,
+        };
+        let b = IoBreakdown {
+            volumes: vec![v],
+            nics: vec![n],
+        };
         let json = serde_json::to_value(&b).unwrap();
         assert_eq!(json["volumes"][0]["readBps"], 1);
         assert_eq!(json["nics"][0]["txBps"], 4);

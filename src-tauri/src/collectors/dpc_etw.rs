@@ -66,7 +66,8 @@ impl ModuleTable {
                 return Self { modules: mods };
             }
 
-            let count = buf.get(0..4)
+            let count = buf
+                .get(0..4)
                 .and_then(|s| <[u8; 4]>::try_from(s).ok())
                 .map(|a| u32::from_le_bytes(a) as usize)
                 .unwrap_or(0);
@@ -77,19 +78,21 @@ impl ModuleTable {
             let count = count.min(usable);
             for i in 0..count {
                 let off = ENTRY_HDR + i * STRIDE;
-                let Some(image_base) = buf.get(off + 16..off + 24)
-                .and_then(|s| <[u8; 8]>::try_from(s).ok())
-                .map(u64::from_le_bytes)
-            else {
-                continue;
-            };
+                let Some(image_base) = buf
+                    .get(off + 16..off + 24)
+                    .and_then(|s| <[u8; 8]>::try_from(s).ok())
+                    .map(u64::from_le_bytes)
+                else {
+                    continue;
+                };
                 // ImageSize 是 u32,与 ImageBase 相邻(+24..28)
-                let Some(image_size) = buf.get(off + 24..off + 28)
-                .and_then(|s| <[u8; 4]>::try_from(s).ok())
-                .map(|a| u32::from_le_bytes(a) as u64)
-            else {
-                continue;
-            };
+                let Some(image_size) = buf
+                    .get(off + 24..off + 28)
+                    .and_then(|s| <[u8; 4]>::try_from(s).ok())
+                    .map(|a| u32::from_le_bytes(a) as u64)
+                else {
+                    continue;
+                };
                 // 完整路径文本(\SystemRoot\...),以 NUL 截断
                 let path_buf = &buf[off + 40..off + STRIDE];
                 let path_end = path_buf
@@ -250,10 +253,7 @@ impl DpcWatch {
                         let _ = trace.stop();
                     }
                     Err(e) => {
-                        logging::error(
-                            "dpc-etw",
-                            format!("内核会话创建失败(需管理员): {e:?}"),
-                        );
+                        logging::error("dpc-etw", format!("内核会话创建失败(需管理员): {e:?}"));
                         *error.lock().unwrap_or_else(|p| p.into_inner()) =
                             Some(describe_start_error(&e));
                     }

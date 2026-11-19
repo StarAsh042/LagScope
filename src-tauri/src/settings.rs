@@ -188,7 +188,9 @@ pub fn save_mini_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> 
     settings.mini_y = y;
     let value = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
     store.set(STORE_KEY, value);
-    store.save().map_err(|e| format!("保存悬浮窗位置失败: {e}"))?;
+    store
+        .save()
+        .map_err(|e| format!("保存悬浮窗位置失败: {e}"))?;
     Ok(())
 }
 
@@ -399,9 +401,15 @@ mod tests {
         assert!(json.contains("\"miniWidth\""), "字段名须为 camelCase");
         let back: Settings = serde_json::from_str(&json).expect("反序列化应成功");
         assert_eq!(back.mini_width, 1234.0);
-        assert_eq!(back.mini_metrics, vec!["CPU".to_string(), "帧率".to_string()]);
+        assert_eq!(
+            back.mini_metrics,
+            vec!["CPU".to_string(), "帧率".to_string()]
+        );
         assert!((back.mini_size().0 - 900.0).abs() < f64::EPSILON);
-        assert!((back.mini_size().1 - 64.0).abs() < f64::EPSILON, "越界高度夹到下限 64");
+        assert!(
+            (back.mini_size().1 - 64.0).abs() < f64::EPSILON,
+            "越界高度夹到下限 64"
+        );
         assert_eq!(back.mini_position(), None, "X 为负时位置无效");
     }
 }
