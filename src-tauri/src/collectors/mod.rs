@@ -511,6 +511,27 @@ mod tests {
         assert_eq!(rate_per_sec(500, 500), 0);
     }
 
+    /// 无 PDH 计数器时,系统级指标仍从 sysinfo 正确填充,PDH 字段保持默认。
+    #[test]
+    fn build_sample_without_counters_uses_sysinfo() {
+        let mut sys = System::new().expect("创建 System 失败");
+        sys.refresh_all();
+        let sample = build_sample(&sys, None, 123, 456);
+
+        assert!(sample.ts_ms > 0, "时间戳应为 epoch 毫秒");
+        assert!(sample.cpu_total >= 0.0 && sample.cpu_total <= 100.0);
+        assert_eq!(sample.cpu_per_core.len(), sys.cpus().len());
+        assert_eq!(sample.net_rx_bps, 123);
+        assert_eq!(sample.net_tx_bps, 456);
+        assert_eq!(sample.mem_total, sys.total_memory());
+        // PDH 相关字段在无计数器时应保持默认,不应出现幽灵数值
+        assert_eq!(sample.mem_commit_used, 0);
+        assert_eq!(sample.page_input_per_sec, 0.0);
+        assert_eq!(sample.disk_read_bps, 0);
+        assert!(sample.gpu_util_pct.is_none());
+        assert!(sample.temperature_c.is_none());
+    }
+
     #[test]
     fn io_breakdown_serializes_camel_case() {
         let v = VolumeIo { mount: "C:".into(), read_bps: 1, write_bps: 2 };

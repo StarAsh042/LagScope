@@ -720,6 +720,63 @@ mod tests {
         assert!(!cpu_fired_early, "CPU 30 秒窗口未满,不应因 CPU 触发事件");
     }
 
+    /// 回归:sustained 要求窗口内每个样本都满足谓词,任一样本跌破即不触发。
+    #[test]
+    fn sustained_requires_all_samples_match() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 3,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        // 交替高低:任何 3 秒窗口里必有一个样本跌破阈值,始终不应触发
+        for i in 0..8u64 {
+            let cpu = if i % 2 == 0 { 95.0 } else { 10.0 };
+            assert!(
+                det.feed(&sample(base + i * 1000, cpu), &[], &[], None, None, &cfg)
+                    .is_none(),
+                "窗口内有一个样本不满足即不应触发"
+            );
+        }
+    }
+
+    /// sustained 只覆盖最近 N 秒;窗口外的早期满载不应算数。
+    #[test]
+    fn sustained_uses_only_recent_window() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 3,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        let base: u64 = 1_793_000_000_000;
+        // 先喂 5 秒满载,再喂 5 秒低负载,最近 3 秒窗口内应全为低负载
+        for i in 0..5u64 {
+            det.feed(&sample(base + i * 1000, 95.0), &[], &[], None, None, &cfg);
+        }
+        for i in 5..10u64 {
+            assert!(
+                det.feed(&sample(base + i * 1000, 10.0), &[], &[], None, None, &cfg)
+                    .is_none(),
+                "最近窗口内已非满载,不应触发"
+            );
+        }
+    }
+
+    /// 回归:窗口内样本不足 2 个时 sustained 返回 None(边界)。
+    #[test]
+    fn sustained_needs_at_least_two_samples() {
+        let cfg = DetectorConfig {
+            cpu_sustain_s: 1,
+            ..DetectorConfig::default()
+        };
+        let mut det = LagDetector::new();
+        assert!(
+            det.feed(&sample(1_793_000_000_000, 95.0), &[], &[], None, None, &cfg)
+                .is_none(),
+            "仅一个样本不足以判定持续过载"
+        );
+    }
+
     fn proc(pid: u32, cpu: f32, mem: f64, disk: f64) -> ProcessInfo {
         ProcessInfo {
             pid,
