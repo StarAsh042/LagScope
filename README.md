@@ -62,7 +62,31 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 
 ## 截图
 
-暂无截图。仓库内没有当前版本的真实窗口截图；按规范不放占位图或应用图标冒充界面截图。2.4 要求的真实窗口截图标记为【未验证】。
+以下均为 Windows 11 真机运行当前版本（v1.1.1）的实际窗口截图，未使用占位图或应用图标冒充。截图中的实时指标随机波动，属正常现象。
+
+### 仪表盘
+
+![仪表盘：实时指标、监控图表、I/O 细分与进程表](static/screenshots/dashboard.png)
+
+### 卡顿事件时间线
+
+![卡顿事件：时间线、类型筛选与事件详情](static/screenshots/events.png)
+
+### 启动项管理
+
+![启动项：名称、来源、命令与目标](static/screenshots/startup.png)
+
+### 运行日志
+
+![运行日志：级别/关键词过滤与自动刷新](static/screenshots/logs.png)
+
+### 设置
+
+![设置：检测阈值、行为开关与悬浮窗自定义](static/screenshots/settings.png)
+
+### 悬浮窗
+
+![悬浮窗：六项指标实时读数](static/screenshots/mini.png)
 
 ## 前置条件
 

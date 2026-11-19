@@ -12,11 +12,15 @@
   // 悬浮窗用 Tauri 原生菜单替代 Chromium 默认网页菜单；主窗口不需要右键菜单。
   // 输入框内保留系统文本菜单，方便复制粘贴。
   async function onContextMenu(e: MouseEvent) {
-    if (getCurrentWindow().label !== "mini") return;
+    const win = getCurrentWindow();
+    if (win.label !== "mini") {
+      // 主窗口不需要右键菜单，连 Chromium 默认网页菜单也一并抑制。
+      e.preventDefault();
+      return;
+    }
     const target = e.target instanceof HTMLElement ? e.target : null;
     if (target?.closest('input, textarea, [contenteditable="true"]')) return;
     e.preventDefault();
-    const win = getCurrentWindow();
     try {
       const menu = await Menu.new({
         items: [
