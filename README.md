@@ -32,11 +32,11 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 
 ## 功能
 
-- **实时仪表盘**：CPU（总 / 每核）、内存 / 提交内存、磁盘（速率 / 活跃 / 延迟 / 队列）、GPU（3D 引擎 / 显存）、网络、DPC 与硬缺页、帧率、热区温度的 1 Hz 实时曲线；进程表支持排序、过滤、结束进程与高耗标记。
+- **实时仪表盘**：CPU（总 / 每核）、内存 / 提交内存、磁盘（速率 / 活跃 / 延迟 / 队列）、GPU（3D 引擎 / 显存）、网络、DPC 与内存换页、帧率、热区温度的 1 Hz 实时曲线；进程表支持排序、过滤、结束进程与高耗标记。
 - **卡顿自动归因**：后台滚动窗口持续评估以下信号，命中阈值即生成事件（带中文归因描述），存入 SQLite。
   - CPU 满载持续（默认 85% × 10s）。
   - 提交内存逼近上限（默认 90%）。
-  - 硬缺页风暴（默认 500 页/秒）。
+  - 内存换页风暴（默认 500 页/秒）。
   - 磁盘平均延迟超标（默认 25 ms，持续 5s）。
   - 中断时间占比过高（默认 20%）。
   - 无响应（挂起）窗口检测（与任务管理器「未响应」同判定）。
@@ -47,13 +47,14 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 - **常驻后台**：托盘图标（左键切窗口，右键菜单含悬浮窗 / 立即诊断 / 退出），关闭窗口隐藏到托盘继续采集，单实例，可选开机自启。
 - **启动项分析**：注册表 Run 键（HKCU / HKLM / WOW64）与启动文件夹扫描，禁用 / 启用与任务管理器同机制（StartupApproved），残留项检测。
 - **设置页**：全部阈值可调并热生效；帧监测与 DPC 归因开关；设置与事件数据持久化于本机。
+- **权限引导**：以普通权限运行时，设置页显示当前权限与 DPC 失败原因，并提供「以管理员身份重启」；系统级启动项因权限不足失败时同样给出入口。取消 UAC 按正常操作处理，不会报错。
 
 ## 卡顿检测机制
 
 | 信号 | 机制 |
 |---|---|
 | CPU / 内存 / 进程 / 网络 | [`sysinfo`](https://github.com/GuillaumeGomez/sysinfo) 1 Hz 轮询 |
-| 提交内存 / 硬缺页 / 磁盘延迟 / 队列 / DPC / 中断 / GPU 引擎 | Windows PDH 性能计数器（`PdhAddEnglishCounterW`，兼容本地化系统与新版计数器名） |
+| 提交内存 / 内存换页 / 磁盘延迟 / 队列 / DPC / 中断 / GPU 引擎 | Windows PDH 性能计数器（`PdhAddEnglishCounterW`，兼容本地化系统与新版计数器名） |
 | 挂起窗口 | `EnumWindows` + `SendMessageTimeout(SMTO_ABORTIFHUNG)`，独立线程检测避免拖慢采样 |
 | 进程 I/O 归因 | `sysinfo` `disk_usage`（含全部 I/O，而非纯磁盘） |
 
@@ -61,7 +62,31 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 
 ## 截图
 
-暂无截图。仓库内没有当前版本的真实窗口截图；按规范不放占位图或应用图标冒充界面截图。2.4 要求的真实窗口截图标记为【未验证】。
+以下均为 Windows 11 真机运行当前版本（v1.1.1）的实际窗口截图，未使用占位图或应用图标冒充。截图中的实时指标随机波动，属正常现象。
+
+### 仪表盘
+
+![仪表盘：实时指标、监控图表、I/O 细分与进程表](static/screenshots/dashboard.png)
+
+### 卡顿事件时间线
+
+![卡顿事件：时间线、类型筛选与事件详情](static/screenshots/events.png)
+
+### 启动项管理
+
+![启动项：名称、来源、命令与目标](static/screenshots/startup.png)
+
+### 运行日志
+
+![运行日志：级别/关键词过滤与自动刷新](static/screenshots/logs.png)
+
+### 设置
+
+![设置：检测阈值、行为开关与悬浮窗自定义](static/screenshots/settings.png)
+
+### 悬浮窗
+
+![悬浮窗：六项指标实时读数](static/screenshots/mini.png)
 
 ## 前置条件
 
@@ -72,7 +97,7 @@ LagScope 卡顿透视是一个 Windows 桌面应用，用于回答「电脑刚�
 | Node.js | >= 20（CI 使用 22） | 从源码构建时必需 | 运行 `npm` 脚本与前端类型检查 |
 | npm | 随 Node.js 提供 | 从源码构建时必需 | 本仓库使用 `package-lock.json`（lockfileVersion 3） |
 | Rust | stable（本地实测 1.99.0） | 从源码构建时必需 | 编译 `src-tauri`；`edition = "2024"` 需要较新的 stable |
-| 管理员权限 | 不适用 | 否 | ETW DPC 驱动归因需要管理员权限，非管理员时自动降级；其余功能不需要 |
+| 管理员权限 | 不适用 | 否 | ETW DPC 驱动归因与系统级（HKLM）启动项写入需要管理员权限，非管理员时自动降级；可在应用内「以管理员身份重启」 |
 | [Intel PresentMon](https://github.com/GameTechDev/PresentMon) | 随安装包提供 `extras/PresentMon.exe` | 否 | 关闭后失去帧率与帧间隔尖峰监测 |
 
 ## 安装
@@ -127,7 +152,7 @@ npm run tauri dev
 | `cpuPct` | 否 | 85 | `85` | 否 | CPU 满载判定阈值，单位 %；取值 0–100 |
 | `cpuSustainS` | 否 | 10 | `10` | 否 | CPU 满载持续时间，单位 s |
 | `commitPct` | 否 | 90 | `90` | 否 | 提交内存占上限比例阈值，单位 %；取值 0–100 |
-| `pageInput` | 否 | 500 | `500` | 否 | 硬缺页速率阈值，单位 页/s |
+| `pageInput` | 否 | 500 | `500` | 否 | 内存换页速率阈值，单位 页/s |
 | `diskTransferMs` | 否 | 25 | `25` | 否 | 磁盘平均延迟阈值，单位 ms |
 | `diskSustainS` | 否 | 5 | `5` | 否 | 磁盘延迟超标持续时间，单位 s |
 | `interruptPct` | 否 | 20 | `20` | 否 | 中断时间占比阈值，单位 %；取值 0–100 |
@@ -197,6 +222,7 @@ src-tauri/src/         Rust 后端
   engine/              卡顿检测引擎与阈值
   store/               SQLite 事件库
   settings.rs          设置持久化与热更新
+  admin.rs             管理员权限检测与提权重启
 src-tauri/capabilities/ Tauri 权限配置
 src-tauri/extras/       PresentMon.exe
 src-tauri/icons/        应用图标

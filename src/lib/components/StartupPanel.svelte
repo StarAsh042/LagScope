@@ -3,7 +3,10 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
+  import { ADMIN_HINT, relaunchAsAdmin } from "$lib/admin";
+  import { errorText } from "$lib/errors";
   import type { StartupItem } from "$lib/types";
+  import StatusNote from "$lib/components/StatusNote.svelte";
 
   let items = $state<StartupItem[]>([]);
   let loading = $state(true);
@@ -11,13 +14,45 @@
   let busy = $state("");
   let search = $state("");
 
+  /** 同一名字可能同时存在于 HKCU 与 HKLM,忙碌标记必须带上来源 */
+  const key = (it: StartupItem) => it.source + "\u0000" + it.name;
+
+  /** 系统级项目写 StartupApproved 需要管理员权限 */
+  const needsAdmin = (it: StartupItem) =>
+    it.source === "machineRun" || it.source === "machineRunWow";
+
+  /** 启动文件夹项目没有启用/禁用开关,只能删快捷方式 */
+  const isFolder = (it: StartupItem) =>
+    it.source === "userFolder" || it.source === "commonFolder";
+
+  const adminHint = $derived(errMsg.includes("需要管理员权限") ? ADMIN_HINT : "");
+
+  let relaunching = $state(false);
+  /** 取消 / 失败提示与 errMsg 分开:权限错误和重试入口必须留着 */
+  let relaunchNote = $state("");
+
+  /** 与设置页同一个入口:拉起重启后本进程退出,通常收不到回包 */
+  async function relaunch() {
+    relaunching = true;
+    relaunchNote = "";
+    try {
+      // 拿到 false 说明用户在 UAC 弹窗上点了「否」,这不是失败:
+      // 原来的权限错误与重试入口都保留,只补一句状态
+      if (!(await relaunchAsAdmin())) relaunchNote = "已取消提权，权限未变更。";
+    } catch (e) {
+      relaunchNote = errorText(e);
+    } finally {
+      relaunching = false;
+    }
+  }
+
   async function load() {
     loading = true;
     errMsg = "";
     try {
       items = await invoke<StartupItem[]>("get_startup_items");
     } catch (e) {
-      errMsg = String(e);
+      errMsg = errorText(e);
     } finally {
       loading = false;
     }
@@ -48,7 +83,7 @@
   }
 
   async function toggle(item: StartupItem) {
-    busy = item.name;
+    busy = key(item);
     errMsg = "";
     try {
       await invoke("set_startup_enabled", {
@@ -58,7 +93,7 @@
       });
       await load();
     } catch (e) {
-      errMsg = String(e);
+      errMsg = errorText(e);
     } finally {
       busy = "";
     }
@@ -75,10 +110,19 @@
   </div>
   <input class="search" type="search" placeholder="搜索名称或命令…" bind:value={search} />
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <StatusNote
+      kind="error"
+      message={errMsg}
+      hint={adminHint}
+      actionLabel={adminHint ? (relaunching ? "正在提权…" : "以管理员身份重启") : ""}
+      onAction={relaunch}
+    />
+  {/if}
+  {#if relaunchNote}
+    <p class="relaunch-note">{relaunchNote}</p>
   {/if}
   {#if loading}
-    <div class="loading">扫描中…</div>
+    <StatusNote kind="loading" message="扫描中…" />
   {:else}
     <div class="scroll">
       <table>
@@ -115,16 +159,18 @@
                 {/if}
               </td>
               <td>
-                {#if it.source === "userRun"}
+                {#if isFolder(it)}
+                  <span class="dim" title={it.advice}>{it.advice || "—"}</span>
+                {:else}
                   <button
                     class="act"
-                    disabled={busy === it.name}
+                    class:admin={needsAdmin(it)}
+                    disabled={busy === key(it)}
+                    title={needsAdmin(it) ? "系统级项目,修改需要管理员权限" : undefined}
                     onclick={() => toggle(it)}
                   >
-                    {busy === it.name ? "…" : it.enabled ? "禁用" : "启用"}
+                    {busy === key(it) ? "…" : it.enabled ? "禁用" : "启用"}
                   </button>
-                {:else}
-                  <span class="dim" title={it.advice}>{it.advice || "—"}</span>
                 {/if}
               </td>
             </tr>
@@ -134,72 +180,61 @@
     </div>
   {/if}
   <div class="note">
-    禁用/启用通过 Explorer StartupApproved 键实现,与任务管理器"启动应用"一致;
-    系统级(HKLM)项目修改需要管理员权限。
+    禁用/启用通过 Explorer StartupApproved 键实现,与任务管理器"启动应用"一致。
+    系统级(HKLM)项目需要以管理员身份运行本程序才能修改;启动文件夹项目请删除对应快捷方式。
   </div>
 </div>
 
 <style>
   .panel {
     flex: 1 0 480px;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
     min-height: 0;
   }
   .head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13.5px;
-    font-weight: 600;
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
   }
   .stats {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-sm);
+    font-weight: var(--weight-normal);
+    color: var(--text-dim);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-8);
   }
   .refresh {
     background: transparent;
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text-dim, #8b94a7);
-    border-radius: 6px;
-    font-size: 11.5px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-xs);
     padding: 3px 10px;
     cursor: pointer;
   }
   .refresh:hover {
-    color: var(--text, #e8ecf4);
+    color: var(--text);
   }
   .search {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
-    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-lg);
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--font-sm);
     width: 260px;
-    outline: none;
   }
   .search:focus {
-    border-color: #3b6cd4;
-  }
-  .err {
-    color: var(--err, #e5484d);
-    font-size: 12px;
-  }
-  .loading {
-    color: var(--text-dim, #8b94a7);
-    font-size: 12.5px;
-    padding: 20px;
-    text-align: center;
+    border-color: var(--accent);
   }
   .scroll {
     overflow: auto;
@@ -209,17 +244,17 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   th {
     position: sticky;
     top: 0;
-    background: var(--panel, #131926);
-    color: var(--text-dim, #8b94a7);
+    background: var(--panel);
+    color: var(--text-dim);
     text-align: left;
     padding: 6px 8px;
-    border-bottom: 1px solid var(--border, #232a3a);
-    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    font-weight: var(--weight-medium);
     white-space: nowrap;
     z-index: 1;
   }
@@ -228,8 +263,8 @@
   }
   td {
     padding: 5px 8px;
-    border-bottom: 1px solid #1a2130;
-    color: var(--text, #e8ecf4);
+    border-bottom: 1px solid var(--panel-alt);
+    color: var(--text);
     white-space: nowrap;
   }
   td.num {
@@ -240,53 +275,65 @@
     max-width: 380px;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-dim, #b7c0d4);
+    color: var(--text-dim);
   }
   tr:hover td {
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   .dim {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .missing {
-    color: var(--err, #e5484d);
+    color: var(--err);
   }
   .badge.warn {
     display: inline-block;
-    background: #3a2b12;
-    color: var(--warn, #f5a623);
-    border: 1px solid #6b4d16;
-    border-radius: 4px;
-    font-size: 10px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-2xs);
     padding: 1px 5px;
     margin-left: 6px;
   }
   .state.on {
-    color: var(--ok, #3dd68c);
+    color: var(--ok);
   }
   .state.off {
-    color: var(--text-dim, #8b94a7);
+    color: var(--text-dim);
   }
   .act {
     background: transparent;
-    border: 1px solid #2f4a8a;
-    color: #7fa3ee;
-    border-radius: 5px;
-    font-size: 11px;
+    border: 1px solid var(--accent-border);
+    color: var(--accent-strong);
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
     padding: 2px 10px;
     cursor: pointer;
   }
   .act:hover {
-    background: #16203a;
+    background: var(--accent-soft);
+  }
+  .act.admin {
+    border-color: var(--warn-border-soft);
+    color: var(--warn-strong);
+  }
+  .act.admin:hover {
+    background: var(--warn-bg-soft);
   }
   .act:disabled {
     opacity: 0.5;
     cursor: default;
   }
   .note {
-    font-size: 11px;
-    color: var(--text-dim, #8b94a7);
-    border-top: 1px solid var(--border, #232a3a);
+    font-size: var(--font-xs);
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
     padding-top: 6px;
+  }
+  .relaunch-note {
+    margin: 0;
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
 </style>

@@ -4,7 +4,9 @@
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-import type { DiskInfo, GameSample, MetricSample, ProcessInfo } from "$lib/types";
+import { errorText } from "$lib/errors";
+import { notify } from "$lib/toast.svelte";
+import type { DiskInfo, GameSample, IoBreakdown, MetricSample, ProcessInfo } from "$lib/types";
 
 /** 历史窗口:120 秒(1Hz) */
 export const HISTORY_LEN = 120;
@@ -14,43 +16,50 @@ export const metrics = $state({
   history: [] as MetricSample[],
   processes: [] as ProcessInfo[],
   disks: [] as DiskInfo[],
+  io: { volumes: [], nics: [] } as IoBreakdown,
   game: null as GameSample | null,
   gameHistory: [] as GameSample[],
   connected: false,
 });
 
 let started = false;
+/** 本模块创建的定时器;stopMetrics() 负责全部撤掉 */
+const timers: ReturnType<typeof setInterval>[] = [];
+/** Tauri 事件监听的注销函数,同样交给 stopMetrics() */
+const unlisteners: (() => void)[] = [];
 
 export async function startMetrics() {
   if (started) return;
   started = true;
 
   // 订阅采集线程的 1Hz 推送
-  await listen<MetricSample>("metrics:sample", (e) => {
+  unlisteners.push(await listen<MetricSample>("metrics:sample", (e) => {
     metrics.latest = e.payload;
     metrics.connected = true;
     metrics.history.push(e.payload);
     if (metrics.history.length > HISTORY_LEN) {
       metrics.history.splice(0, metrics.history.length - HISTORY_LEN);
     }
-  });
+  }));
 
   // 帧监测(PresentMon):有渲染活动时 1Hz
-  await listen<GameSample>("game:sample", (e) => {
+  unlisteners.push(await listen<GameSample>("game:sample", (e) => {
     metrics.game = e.payload;
     metrics.gameHistory.push(e.payload);
     if (metrics.gameHistory.length > HISTORY_LEN) {
       metrics.gameHistory.splice(0, metrics.gameHistory.length - HISTORY_LEN);
     }
-  });
+  }));
 
   // 陈旧数据守卫:数据流断掉(如监测器崩溃)后清空显示,避免幽灵数值
-  setInterval(() => {
-    const now = Date.now();
-    if (metrics.game && now - metrics.game.tsMs > 5000) {
-      metrics.game = null;
-    }
-  }, 3000);
+  timers.push(
+    setInterval(() => {
+      const now = Date.now();
+      if (metrics.game && now - metrics.game.tsMs > 5000) {
+        metrics.game = null;
+      }
+    }, 3000)
+  );
 
   // 启动时先补一次最新值(避免图表空白 1 秒)
   const seed = await invoke<MetricSample | null>("get_latest_sample");
@@ -64,11 +73,13 @@ export async function startMetrics() {
     try {
       metrics.processes = await invoke<ProcessInfo[]>("get_processes");
     } catch (err) {
+      // 进程表刷新失败会让界面长期停在旧数据上,必须让用户看见
       console.error("get_processes 失败", err);
+      notify("进程列表刷新失败: " + errorText(err), "warn");
     }
   };
   await pollProcesses();
-  setInterval(pollProcesses, 2000);
+  timers.push(setInterval(pollProcesses, 2000));
 
   // 磁盘容量(30s 足够)
   const pollDisks = async () => {
@@ -76,10 +87,38 @@ export async function startMetrics() {
       metrics.disks = await invoke<DiskInfo[]>("get_disks");
     } catch (err) {
       console.error("get_disks 失败", err);
+      notify("磁盘容量读取失败: " + errorText(err), "warn");
     }
   };
   await pollDisks();
-  setInterval(pollDisks, 30000);
+  timers.push(setInterval(pollDisks, 30000));
+
+  // I/O 细分(每卷/每网卡速率,2s 轮询即可)
+  const pollIo = async () => {
+    try {
+      metrics.io = await invoke<IoBreakdown>("get_io_breakdown");
+    } catch (err) {
+      console.error("get_io_breakdown 失败", err);
+    }
+  };
+  await pollIo();
+  timers.push(setInterval(pollIo, 2000));
+}
+
+/**
+ * 撤掉全部轮询定时器并允许重新 start。
+ *
+ * 事件监听(`listen`)由 Tauri 的 unlisten 管理,这里只管定时器;
+ * 前端路由切换时(仪表盘 ⇄ 迷你窗)必须调用,否则每进一次多一套轮询。
+ */
+export function stopMetrics() {
+  while (timers.length) {
+    clearInterval(timers.pop()!);
+  }
+  while (unlisteners.length) {
+    unlisteners.pop()!();
+  }
+  started = false;
 }
 
 // ---- 格式化工具 ----

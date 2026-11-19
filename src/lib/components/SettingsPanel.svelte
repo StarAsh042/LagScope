@@ -3,12 +3,9 @@
 
   import { invoke } from "@tauri-apps/api/core";
 
-  interface MonitorStatus {
-    frameActive: boolean;
-    dpcActive: boolean;
-    frameEnabled: boolean;
-    dpcEnabled: boolean;
-  }
+  import AdminNotice from "$lib/components/AdminNotice.svelte";
+  import StatusNote from "$lib/components/StatusNote.svelte";
+  import type { MonitorStatus } from "$lib/types";
 
   let monitor = $state<MonitorStatus | null>(null);
 
@@ -17,27 +14,40 @@
     cpuSustainS: number;
     commitPct: number;
     pageInput: number;
+    pageSustainS: number;
+    memSustainS: number;
     diskTransferMs: number;
     diskSustainS: number;
     interruptPct: number;
+    interruptSustainS: number;
+    stutterGapMs: number;
+    dpcTotalThreshold: number;
     cooldownS: number;
+    retainRows: number;
     closeToTray: boolean;
     autostart: boolean;
     enableFrameMonitor: boolean;
     enableDpcWatch: boolean;
+    notifyLag: boolean;
+    miniWidth: number;
+    miniHeight: number;
+    miniX: number;
+    miniY: number;
+    miniOpacity: number;
+    miniMetrics: string[];
   }
+
+  const MINI_METRICS = ["CPU", "内存", "GPU", "磁盘", "网络", "帧率"];
 
   let s = $state<Settings | null>(null);
   let saving = $state(false);
   let saved = $state(false);
   let errMsg = $state("");
 
-  onMount(async () => {
-    try {
-      s = await invoke<Settings>("get_settings");
-    } catch (e) {
-      errMsg = String(e);
-    }
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let savedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  onMount(() => {
     // 轮询监测器实际运行状态(5s)
     const poll = async () => {
       try {
@@ -46,9 +56,45 @@
         /* 忽略瞬时失败 */
       }
     };
-    await poll();
-    setInterval(poll, 5000);
+
+    void (async () => {
+      try {
+        s = await invoke<Settings>("get_settings");
+      } catch (e) {
+        errMsg = String(e);
+      }
+      if (!pollTimer) {
+        await poll();
+        pollTimer = setInterval(poll, 5000);
+      }
+    })();
+
+    // 面板按 tab 挂载/卸载;不撤定时器的话每切一次就多一套轮询
+    return () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (savedTimer) {
+        clearTimeout(savedTimer);
+        savedTimer = null;
+      }
+    };
   });
+
+  let miniOpacityPercent = $state(100);
+
+  $effect(() => {
+    if (s) miniOpacityPercent = Math.round((s.miniOpacity || 1) * 100);
+  });
+
+  function toggleMetric(metric: string) {
+    if (!s) return;
+    const values = s.miniMetrics.includes(metric)
+      ? s.miniMetrics.filter((v) => v !== metric)
+      : [...s.miniMetrics, metric];
+    s = { ...s, miniMetrics: values };
+  }
 
   async function save() {
     if (!s) return;
@@ -56,9 +102,14 @@
     saved = false;
     errMsg = "";
     try {
+      s.miniOpacity = Math.min(1, Math.max(0.3, miniOpacityPercent / 100));
       await invoke("set_settings", { settings: s });
       saved = true;
-      setTimeout(() => (saved = false), 2000);
+      if (savedTimer) clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => {
+        saved = false;
+        savedTimer = null;
+      }, 2000);
     } catch (e) {
       errMsg = String(e);
     } finally {
@@ -70,7 +121,7 @@
 <div class="panel">
   <div class="head">设置</div>
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <StatusNote kind="error" message={errMsg} />
   {/if}
   {#if s}
     <div class="group">
@@ -88,8 +139,16 @@
         <input type="number" min="50" max="100" bind:value={s.commitPct} />
       </label>
       <label>
-        <span>硬缺页阈值 页/秒</span>
+        <span>内存换页阈值 页/秒</span>
         <input type="number" min="100" max="5000" bind:value={s.pageInput} />
+      </label>
+      <label>
+        <span>内存换页持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.pageSustainS} />
+      </label>
+      <label>
+        <span>内存占用持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.memSustainS} />
       </label>
       <label>
         <span>磁盘延迟阈值 ms</span>
@@ -104,9 +163,63 @@
         <input type="number" min="5" max="90" bind:value={s.interruptPct} />
       </label>
       <label>
+        <span>中断持续秒数</span>
+        <input type="number" min="2" max="60" bind:value={s.interruptSustainS} />
+      </label>
+      <label>
+        <span>帧间隔尖峰 ms</span>
+        <input type="number" min="20" max="1000" bind:value={s.stutterGapMs} />
+      </label>
+      <label>
+        <span>DPC 每秒阈值</span>
+        <input
+          type="number"
+          min="1000"
+          max="100000"
+          step="500"
+          bind:value={s.dpcTotalThreshold}
+        />
+      </label>
+      <label>
         <span>同类事件冷却 秒</span>
         <input type="number" min="10" max="600" bind:value={s.cooldownS} />
       </label>
+      <label>
+        <span>事件库保留条数</span>
+        <input
+          type="number"
+          min="50"
+          max="20000"
+          step="50"
+          bind:value={s.retainRows}
+        />
+      </label>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">悬浮窗</div>
+      <label>
+        <span>宽度 px</span>
+        <input type="number" min="160" max="900" bind:value={s.miniWidth} />
+      </label>
+      <label>
+        <span>高度 px</span>
+        <input type="number" min="64" max="600" bind:value={s.miniHeight} />
+      </label>
+      <label>
+        <span>透明度 %</span>
+        <input type="range" min="30" max="100" bind:value={miniOpacityPercent} />
+      </label>
+      <div class="metric-picks">
+        <span class="pick-title">显示指标</span>
+        {#each MINI_METRICS as metric}
+          <label class="check">
+            <input type="checkbox" checked={s.miniMetrics.includes(metric)} onchange={() => toggleMetric(metric)} />
+            <span>{metric}</span>
+          </label>
+        {/each}
+      </div>
+      <p class="hint">位置由悬浮窗拖动决定;双击悬浮窗返回主窗口。</p>
     </div>
 
     <div class="group">
@@ -121,7 +234,7 @@
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={s.enableFrameMonitor} />
-        <span>游戏帧监测(PresentMon,检测帧率骤降与卡帧)</span>
+        <span>渲染帧监测(PresentMon,检测帧率骤降与帧间隔尖峰)</span>
         {#if monitor?.frameEnabled}
           <span class="state-badge" class:on={monitor.frameActive}>
             {monitor.frameActive ? "● 运行中" : "○ 已停止"}
@@ -132,11 +245,32 @@
         <input type="checkbox" bind:checked={s.enableDpcWatch} />
         <span>DPC 驱动归因(ETW 内核跟踪,需管理员权限)</span>
         {#if monitor?.dpcEnabled}
-          <span class="state-badge" class:on={monitor.dpcActive}>
-            {monitor.dpcActive ? "● 运行中" : "○ 已停止(需管理员)"}
+          <span
+            class="state-badge"
+            class:on={monitor.dpcActive}
+            title={monitor.dpcError ?? ""}
+          >
+            {monitor.dpcActive
+              ? "● 运行中"
+              : monitor.elevated
+                ? "○ 已停止"
+                : "○ 已停止(需管理员)"}
           </span>
         {/if}
       </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={s.notifyLag} />
+        <span>检测到卡顿时弹系统通知(主窗口在前台时不打扰)</span>
+      </label>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">运行权限</div>
+      <!-- DPC 与系统级启动项的共同前提,全应用只做这一处入口 -->
+      <AdminNotice
+        elevated={monitor?.elevated ?? null}
+        reason={monitor?.dpcError ?? ""}
+      />
     </div>
 
     <div class="actions">
@@ -146,104 +280,118 @@
       {#if saved}<span class="ok">已保存 ✓</span>{/if}
     </div>
   {:else}
-    <div class="loading">加载中…</div>
+    <StatusNote kind="loading" message="加载中…" />
   {/if}
 </div>
 
 <style>
   .panel {
     flex: 1 0 480px;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
     padding: 14px 18px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--space-14);
   }
   .head {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
   }
   .group {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
     padding: 10px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-8);
     max-width: 520px;
   }
   .gtitle {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
+    color: var(--text-dim);
   }
   label {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
+    font-size: var(--font-md);
   }
   label.check {
     justify-content: flex-start;
-    gap: 10px;
+    gap: var(--space-10);
     cursor: pointer;
   }
   input[type="number"] {
     width: 110px;
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
-    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-lg);
     padding: 5px 8px;
-    font-size: 13px;
-    outline: none;
+    font-size: var(--font-md);
   }
   input[type="number"]:focus {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
   .actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-12);
   }
   .save {
-    background: #3b6cd4;
+    background: var(--accent);
     border: none;
-    color: #fff;
-    border-radius: 8px;
+    color: var(--on-accent);
+    border-radius: var(--radius-xl);
     padding: 7px 22px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   .save:hover {
-    background: #4a7be0;
+    background: var(--accent-hover);
   }
   .save:disabled {
     opacity: 0.6;
     cursor: default;
   }
   .ok {
-    color: var(--ok, #3dd68c);
-    font-size: 12.5px;
-  }
-  .err {
-    color: var(--err, #e5484d);
-    font-size: 12.5px;
+    color: var(--ok);
+    font-size: var(--font-sm);
   }
   .state-badge {
     margin-left: auto;
-    font-size: 11px;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
   .state-badge.on {
-    color: var(--ok, #3dd68c);
+    color: var(--ok);
   }
-  .loading {
-    color: var(--text-dim, #8b94a7);
-    font-size: 13px;
+  input[type="range"] {
+    width: 110px;
+    accent-color: var(--accent);
+  }
+  .metric-picks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .pick-title {
+    font-size: var(--font-sm);
+    color: var(--text-dim);
+    width: 100%;
+  }
+  .metric-picks label {
+    font-size: var(--font-sm);
+  }
+  .hint {
+    margin: 0;
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
 </style>

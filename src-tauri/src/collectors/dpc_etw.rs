@@ -11,12 +11,15 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use ferrisetw::parser::Parser;
-use ferrisetw::provider::kernel_providers::DPC_PROVIDER;
-use ferrisetw::provider::Provider;
-use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::KernelTrace;
 use crate::engine::DpcSample;
+use crate::logging;
+use ferrisetw::native::EvntraceNativeError;
+use ferrisetw::parser::Parser;
+use ferrisetw::provider::Provider;
+use ferrisetw::provider::kernel_providers::DPC_PROVIDER;
+use ferrisetw::schema_locator::SchemaLocator;
+use ferrisetw::trace::{KernelTrace, TraceError};
+use windows::Win32::Foundation::ERROR_ACCESS_DENIED;
 
 /// 内核模块表:按基址排序,用于例程地址 → 驱动名
 struct ModuleTable {
@@ -33,9 +36,9 @@ impl ModuleTable {
             // +34..36 NameOffset,+40 起为完整路径文本
             type NtQuerySystemInformationFn =
                 unsafe extern "system" fn(u32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
-            let ntdll = windows::Win32::System::LibraryLoader::GetModuleHandleW(
-                windows::core::w!("ntdll.dll"),
-            )
+            let ntdll = windows::Win32::System::LibraryLoader::GetModuleHandleW(windows::core::w!(
+                "ntdll.dll"
+            ))
             .expect("加载 ntdll");
             let proc_addr = windows::Win32::System::LibraryLoader::GetProcAddress(
                 ntdll,
@@ -63,13 +66,33 @@ impl ModuleTable {
                 return Self { modules: mods };
             }
 
-            let count = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
+            let count = buf
+                .get(0..4)
+                .and_then(|s| <[u8; 4]>::try_from(s).ok())
+                .map(|a| u32::from_le_bytes(a) as usize)
+                .unwrap_or(0);
+            if count == 0 {
+                return Self { modules: mods };
+            }
             let usable = (buf.len() - ENTRY_HDR) / STRIDE;
             let count = count.min(usable);
             for i in 0..count {
                 let off = ENTRY_HDR + i * STRIDE;
-                let image_base =
-                    u64::from_le_bytes(buf[off + 16..off + 24].try_into().unwrap());
+                let Some(image_base) = buf
+                    .get(off + 16..off + 24)
+                    .and_then(|s| <[u8; 8]>::try_from(s).ok())
+                    .map(u64::from_le_bytes)
+                else {
+                    continue;
+                };
+                // ImageSize 是 u32,与 ImageBase 相邻(+24..28)
+                let Some(image_size) = buf
+                    .get(off + 24..off + 28)
+                    .and_then(|s| <[u8; 4]>::try_from(s).ok())
+                    .map(|a| u32::from_le_bytes(a) as u64)
+                else {
+                    continue;
+                };
                 // 完整路径文本(\SystemRoot\...),以 NUL 截断
                 let path_buf = &buf[off + 40..off + STRIDE];
                 let path_end = path_buf
@@ -78,28 +101,28 @@ impl ModuleTable {
                     .unwrap_or(path_buf.len());
                 let path = String::from_utf8_lossy(&path_buf[..path_end]);
                 // 文件名取最后一个反斜杠之后
-                let name = path
-                    .rsplit('\\')
-                    .next()
-                    .unwrap_or(&path)
-                    .to_string();
+                let name = path.rsplit('\\').next().unwrap_or(&path).to_string();
                 if name.is_empty() || image_base == 0 {
                     continue;
                 }
-                mods.push((image_base, 0, name));
+                mods.push((image_base, image_size.max(1), name));
             }
         }
         mods.sort_by_key(|(base, _, _)| *base);
         Self { modules: mods }
     }
 
-    /// 地址 → 驱动名(按排序基址二分;命中最后一个 ≤ 地址的模块)
+    /// 地址 → 驱动名(按排序基址二分;命中最后一个 ≤ 地址的模块)。
+    ///
+    /// 命中后还要校验地址落在该模块的 [base, base + size) 区间内:只有基址
+    /// 二分会让落在末个模块之后的地址也归给它,DPC 归因就会指错驱动。
     fn lookup(&self, addr: u64) -> Option<&str> {
         let idx = self
             .modules
             .partition_point(|(base, _, _)| *base <= addr)
             .checked_sub(1)?;
-        Some(self.modules[idx].2.as_str())
+        let (base, size, name) = &self.modules[idx];
+        (addr < base.saturating_add(*size)).then_some(name.as_str())
     }
 
     #[allow(dead_code)]
@@ -128,6 +151,9 @@ fn now_ms() -> u64 {
 pub struct DpcWatch {
     latest: Arc<Mutex<Option<DpcSample>>>,
     available: Arc<AtomicBool>,
+    /// 内核会话创建失败的原因;成功时为 None。
+    /// 前端据此把「没有权限」从控制台里捞出来展示给用户。
+    error: Arc<Mutex<Option<String>>>,
     /// 置位后会话线程停止 trace 并退出(设置开关用)
     stop: Arc<AtomicBool>,
     handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -141,6 +167,7 @@ impl DpcWatch {
         let watch = Self {
             latest: Arc::new(Mutex::new(None)),
             available: Arc::new(AtomicBool::new(false)),
+            error: Arc::new(Mutex::new(None)),
             stop: Arc::new(AtomicBool::new(false)),
             handle: Mutex::new(None),
         };
@@ -148,6 +175,7 @@ impl DpcWatch {
         let (tx, rx) = std::sync::mpsc::channel::<u64>();
         let latest = watch.latest.clone();
         let available = watch.available.clone();
+        let error = watch.error.clone();
         let stop_session = watch.stop.clone();
         let stop_mt = watch.stop.clone();
 
@@ -157,12 +185,14 @@ impl DpcWatch {
             let mt = module_table.clone();
             thread::Builder::new()
                 .name("dpc-module-table".into())
-                .spawn(move || loop {
-                    thread::sleep(Duration::from_secs(30));
-                    if stop_mt.load(Ordering::Relaxed) {
-                        return;
+                .spawn(move || {
+                    loop {
+                        thread::sleep(Duration::from_secs(30));
+                        if stop_mt.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        *mt.lock().unwrap_or_else(|e| e.into_inner()) = ModuleTable::refresh();
                     }
-                    *mt.lock().unwrap_or_else(|e| e.into_inner()) = ModuleTable::refresh();
                 })
                 .ok();
         }
@@ -195,8 +225,7 @@ impl DpcWatch {
         let handle = thread::Builder::new()
             .name("dpc-etw".into())
             .spawn(move || {
-                let callback = move |record: &ferrisetw::EventRecord,
-                                     locator: &SchemaLocator| {
+                let callback = move |record: &ferrisetw::EventRecord, locator: &SchemaLocator| {
                     if record.opcode() != 68 {
                         return; // DPC 子类型(PerfInfo opcode 68)
                     }
@@ -224,7 +253,9 @@ impl DpcWatch {
                         let _ = trace.stop();
                     }
                     Err(e) => {
-                        eprintln!("[dpc-etw] 内核会话创建失败(需管理员): {e:?}");
+                        logging::error("dpc-etw", format!("内核会话创建失败(需管理员): {e:?}"));
+                        *error.lock().unwrap_or_else(|p| p.into_inner()) =
+                            Some(describe_start_error(&e));
                     }
                 }
             })
@@ -248,6 +279,35 @@ impl DpcWatch {
     pub fn is_available(&self) -> bool {
         self.available.load(Ordering::Relaxed)
     }
+
+    /// 内核会话创建失败的原因;会话正常时为 None
+    pub fn last_error(&self) -> Option<String> {
+        self.error.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+}
+
+/// StartTraceW 失败时 ferrisetw 把 HRESULT 当成 raw OS error 塞进 io::Error:
+/// 拒绝访问既可能是 5,也可能是 0x80070005。两种都要认。
+fn is_access_denied(raw: i32) -> bool {
+    let hr = raw as u32;
+    raw == ERROR_ACCESS_DENIED.0 as i32
+        || ((hr & 0xFFFF) == ERROR_ACCESS_DENIED.0 && (hr >> 16) == 0x8007)
+}
+
+/// 把 ETW 启动失败翻译成用户能看懂的一句话。
+fn describe_start_error(err: &TraceError) -> String {
+    match err {
+        // ERROR_ACCESS_DENIED:普通权限下 StartTraceW 的典型失败
+        TraceError::EtwNativeError(EvntraceNativeError::IoError(io))
+            if io.raw_os_error().is_some_and(is_access_denied) =>
+        {
+            "需要管理员权限才能创建内核跟踪会话".to_string()
+        }
+        TraceError::EtwNativeError(EvntraceNativeError::AlreadyExist) => {
+            "已有同名内核会话在运行,重启 LagScope 后可恢复".to_string()
+        }
+        other => format!("创建内核跟踪会话失败: {other:?}"),
+    }
 }
 
 impl Drop for DpcWatch {
@@ -255,9 +315,10 @@ impl Drop for DpcWatch {
         // 停止标志 → 会话线程 trace.stop() 并退出
         self.stop.store(true, Ordering::Relaxed);
         if let Ok(mut h) = self.handle.lock()
-            && let Some(h) = h.take() {
-                let _ = h.join();
-            }
+            && let Some(h) = h.take()
+        {
+            let _ = h.join();
+        }
     }
 }
 
@@ -271,8 +332,7 @@ fn flush(
     if *total == 0 {
         return;
     }
-    let mut drivers: Vec<(String, u32)> =
-        counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut drivers: Vec<(String, u32)> = counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
     drivers.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
     drivers.truncate(5);
     let sample = DpcSample {
@@ -323,20 +383,87 @@ mod tests {
         );
     }
 
+    fn sample_table() -> ModuleTable {
+        // 区间互不相邻,中间留空洞便于验证上界
+        ModuleTable {
+            modules: vec![
+                (0x1000, 0x1000, "ntoskrnl.exe".into()),
+                (0x5000, 0x2000, "nvlddmkm.sys".into()),
+                (0x9000, 0x0800, "dxgkrnl.sys".into()),
+            ],
+        }
+    }
+
     #[test]
     fn module_table_lookup() {
-        let table = ModuleTable {
-            modules: vec![
-                (0x1000, 0, "ntoskrnl.exe".into()),
-                (0x5000, 0, "nvlddmkm.sys".into()),
-                (0x9000, 0, "dxgkrnl.sys".into()),
-            ],
-        };
-        assert_eq!(table.lookup(0x1000), Some("ntoskrnl.exe"));
-        assert_eq!(table.lookup(0x4FFF), Some("ntoskrnl.exe"));
+        let table = sample_table();
+        assert_eq!(table.lookup(0x1000), Some("ntoskrnl.exe")); // 基址含
+        assert_eq!(table.lookup(0x1FFF), Some("ntoskrnl.exe")); // 上界内
         assert_eq!(table.lookup(0x5000), Some("nvlddmkm.sys"));
-        assert_eq!(table.lookup(0x8ABC), Some("nvlddmkm.sys"));
+        assert_eq!(table.lookup(0x6FFF), Some("nvlddmkm.sys")); // base+size-1
         assert_eq!(table.lookup(0x9000), Some("dxgkrnl.sys"));
         assert_eq!(table.lookup(0x0FFF), None); // 低于首个基址
+    }
+
+    /// 回归:模块 size 之前恒为 0,lookup 只按基址二分,落在末个模块之后的
+    /// 地址会被归给该模块,DPC 归因因此指错驱动。加区间校验后必须是 None。
+    #[test]
+    fn lookup_rejects_address_outside_module() {
+        let table = sample_table();
+        assert_eq!(table.lookup(0x2000), None, "落在空洞里不该归给前一个模块");
+        assert_eq!(
+            table.lookup(0x7000),
+            None,
+            "超出 nvlddmkm 的 [0x5000,0x7000)"
+        );
+        assert_eq!(table.lookup(0x9800), None, "超出 dxgkrnl 的上界");
+        assert_eq!(table.lookup(0xFFFF_FFFF), None, "末个模块之后的地址");
+    }
+
+    /// 上界恰好是 base + size 时越界;size 为 0 的条目只能命中基址本身,
+    /// 不能像以前那样吃掉之后的所有地址。
+    #[test]
+    fn lookup_handles_boundary_and_zero_size() {
+        let edge = ModuleTable {
+            modules: vec![
+                (0x1000, 0x1000, "small.sys".into()),
+                (0x5000, 1, "tiny.sys".into()),
+            ],
+        };
+        assert_eq!(edge.lookup(0x1FFF), Some("small.sys"));
+        assert_eq!(edge.lookup(0x2000), None, "base+size 本身已越界");
+        assert_eq!(edge.lookup(0x5000), Some("tiny.sys"));
+        assert_eq!(edge.lookup(0x5001), None);
+    }
+
+    fn io_error(raw: i32) -> TraceError {
+        TraceError::EtwNativeError(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(raw),
+        ))
+    }
+
+    /// ferrisetw 把 StartTraceW 的 HRESULT 直接塞进 raw_os_error,
+    /// 只认 5 会漏掉真实的拒绝访问(0x80070005),提示就退回成调试字符串。
+    #[test]
+    fn access_denied_is_explained_for_both_encodings() {
+        assert_eq!(
+            describe_start_error(&io_error(5)),
+            "需要管理员权限才能创建内核跟踪会话"
+        );
+        assert_eq!(
+            describe_start_error(&io_error(0x8007_0005u32 as i32)),
+            "需要管理员权限才能创建内核跟踪会话"
+        );
+        // 其他错误不能被误判成权限问题
+        assert!(describe_start_error(&io_error(2)).starts_with("创建内核跟踪会话失败"));
+    }
+
+    #[test]
+    fn existing_session_is_explained() {
+        let err = TraceError::EtwNativeError(EvntraceNativeError::AlreadyExist);
+        assert_eq!(
+            describe_start_error(&err),
+            "已有同名内核会话在运行,重启 LagScope 后可恢复"
+        );
     }
 }

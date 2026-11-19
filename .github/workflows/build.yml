@@ -29,6 +29,9 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      - name: Rustfmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
       - name: Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
@@ -37,6 +40,9 @@ jobs:
 
       - name: Frontend type check
         run: npm run check
+
+      - name: Frontend unit tests
+        run: npm test
 
       - name: Build MSI
         run: npm run tauri build -- --bundles msi

@@ -3,6 +3,7 @@
 
   import type { ProcessInfo } from "$lib/types";
   import { fmtBytesPerSec } from "$lib/stores/metrics.svelte";
+  import StatusNote from "$lib/components/StatusNote.svelte";
 
   let { processes }: { processes: ProcessInfo[] } = $props();
 
@@ -11,6 +12,11 @@
   let sortAsc = $state(false);
   let killing = $state<number | null>(null);
   let errMsg = $state("");
+  // 待确认的结束进程请求。WebView2 里 window.confirm 可能被静默抑制(返回
+  // false 而不弹窗),「结束」按钮于是点了没反应;改用页面内确认层,行为不再
+  // 依赖宿主对话框。
+  let confirming = $state<ProcessInfo | null>(null);
+  let cancelBtn = $state<HTMLButtonElement | null>(null);
 
   type Col = {
     key: keyof ProcessInfo;
@@ -54,9 +60,20 @@
 
   const isHeavy = (p: ProcessInfo) => p.cpuPct >= 45 || p.memMb >= 1024;
 
-  async function kill(p: ProcessInfo) {
-    if (!confirm(`确定结束进程 ${p.name} (PID ${p.pid}) 吗?`)) return;
+  function requestKill(p: ProcessInfo) {
     errMsg = "";
+    confirming = p;
+  }
+
+  function cancelKill() {
+    if (killing !== null) return; // 已发请求,等结果,别让用户以为取消了
+    confirming = null;
+  }
+
+  async function confirmKill() {
+    const p = confirming;
+    if (!p) return;
+    confirming = null;
     killing = p.pid;
     try {
       const ok = await invoke<boolean>("kill_process", { pid: p.pid });
@@ -67,9 +84,46 @@
       killing = null;
     }
   }
+
+  // 打开确认层时把焦点送到「取消」,避免回车误触发破坏性操作
+  $effect(() => {
+    if (confirming && cancelBtn) cancelBtn.focus();
+  });
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && confirming && killing === null) {
+      e.preventDefault();
+      confirming = null;
+    }
+  }
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <div class="panel">
+  {#if confirming}
+    <div class="confirm-backdrop">
+      <div
+        class="confirm"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="kill-title"
+        aria-describedby="kill-desc"
+      >
+        <div class="confirm-title" id="kill-title">结束进程?</div>
+        <div class="confirm-body" id="kill-desc">
+          <strong>{confirming.name}</strong>
+          <span class="dim">PID {confirming.pid}</span>
+          <br />
+          未保存的工作会丢失,进程无法恢复。
+        </div>
+        <div class="confirm-actions">
+          <button class="act" bind:this={cancelBtn} onclick={cancelKill}>取消</button>
+          <button class="act danger" onclick={confirmKill}>结束进程</button>
+        </div>
+      </div>
+    </div>
+  {/if}
   <div class="toolbar">
     <span class="title">进程({view.length}{search ? " / 过滤" : ""})</span>
     <input
@@ -79,7 +133,9 @@
     />
   </div>
   {#if errMsg}
-    <div class="err">{errMsg}</div>
+    <div class="notes">
+      <StatusNote kind="error" message={errMsg} />
+    </div>
   {/if}
   <div class="scroll">
     <table>
@@ -117,7 +173,7 @@
             <td class="num">
               <button
                 disabled={killing === p.pid}
-                onclick={() => kill(p)}
+                onclick={() => requestKill(p)}
                 class="kill"
               >
                 {killing === p.pid ? "…" : "结束"}
@@ -132,9 +188,9 @@
 
 <style>
   .panel {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -146,30 +202,27 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-12);
     margin-bottom: 8px;
   }
   .title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-md);
+    font-weight: var(--weight-bold);
+    color: var(--text-dim);
   }
   input {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text, #e8ecf4);
-    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-lg);
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: var(--font-sm);
     width: 220px;
-    outline: none;
   }
   input:focus {
-    border-color: #3b6cd4;
+    border-color: var(--accent);
   }
-  .err {
-    color: #e5484d;
-    font-size: 12px;
+  .notes {
     margin-bottom: 6px;
   }
   .scroll {
@@ -180,19 +233,19 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
   }
   th {
     position: sticky;
     top: 0;
-    background: var(--panel, #131926);
-    color: var(--text-dim, #8b94a7);
+    background: var(--panel);
+    color: var(--text-dim);
     text-align: left;
     padding: 6px 8px;
-    border-bottom: 1px solid var(--border, #232a3a);
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
     user-select: none;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     white-space: nowrap;
     z-index: 1;
   }
@@ -201,8 +254,8 @@
   }
   td {
     padding: 5px 8px;
-    border-bottom: 1px solid #1a2130;
-    color: var(--text, #e8ecf4);
+    border-bottom: 1px solid var(--panel-alt);
+    color: var(--text);
     white-space: nowrap;
   }
   td.num {
@@ -215,37 +268,97 @@
     text-overflow: ellipsis;
   }
   tr:hover td {
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   .hot {
-    color: #f5a623;
-    font-weight: 600;
+    color: var(--warn);
+    font-weight: var(--weight-bold);
   }
   .badge {
     display: inline-block;
-    background: #3a2b12;
-    color: #f5a623;
-    border: 1px solid #6b4d16;
-    border-radius: 4px;
-    font-size: 10px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-2xs);
     padding: 1px 5px;
     margin-right: 6px;
     vertical-align: middle;
   }
   .kill {
     background: transparent;
-    border: 1px solid #593033;
-    color: #e5484d;
-    border-radius: 5px;
-    font-size: 11px;
+    border: 1px solid var(--err-border-soft);
+    color: var(--err);
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
     padding: 2px 8px;
     cursor: pointer;
   }
   .kill:hover {
-    background: #2a1a1d;
+    background: var(--err-bg-hover);
   }
   .kill:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* 页面内确认层:不依赖 WebView2 的 window.confirm */
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 9, 16, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .confirm {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    padding: 16px 18px;
+    width: 340px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+  .confirm-title {
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .confirm-body {
+    font-size: var(--font-sm);
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+  .confirm-body .dim {
+    color: var(--text-dim);
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-8);
+  }
+  .act {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-sm);
+    padding: 4px 14px;
+    cursor: pointer;
+  }
+  .act:hover {
+    background: var(--panel-alt);
+  }
+  .act.danger {
+    border-color: var(--err-border-soft);
+    color: var(--err);
+  }
+  .act.danger:hover {
+    background: var(--err-bg-hover);
   }
 </style>

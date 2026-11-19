@@ -2,17 +2,61 @@
   import { onMount } from "svelte";
 
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import Icon from "$lib/components/Icon.svelte";
   import {
     fmtBytesPerSec,
     metrics,
     startMetrics,
+    stopMetrics,
   } from "$lib/stores/metrics.svelte";
+  import { isDismissShortcut } from "$lib/shortcuts";
+  import { levelColor } from "$lib/theme";
+  import type { MiniSettings } from "$lib/types";
+
+  const ALL_METRICS = ["CPU", "内存", "GPU", "磁盘", "网络", "帧率"];
+
+  let mini = $state<MiniSettings | null>(null);
+  const visibleKeys = $derived(
+    mini?.miniMetrics?.length ? mini.miniMetrics : ALL_METRICS,
+  );
+  const opacity = $derived(mini?.miniOpacity ?? 1);
+
+  /** Esc 收起悬浮窗(和其他浮层一致) */
+  function onKeydown(e: KeyboardEvent) {
+    if (isDismissShortcut(e)) void invoke("hide_mini");
+  }
 
   onMount(() => {
     void startMetrics();
-  });
+    void invoke<MiniSettings>("get_settings")
+      .then((v) => (mini = v))
+      .catch(() => {});
 
-  const rows = $derived.by(() => {
+    // 拖动保存位置(节流 400ms,避免每次移动都写盘)
+    let moveTimer: ReturnType<typeof setTimeout> | null = null;
+    void getCurrentWindow()
+      .onMoved(({ payload }) => {
+        if (moveTimer) clearTimeout(moveTimer);
+        moveTimer = setTimeout(() => {
+          void invoke("save_mini_position", { x: payload.x, y: payload.y });
+          moveTimer = null;
+        }, 400);
+      })
+      .then((unlisten) => {
+        cleanupMove = unlisten;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (moveTimer) clearTimeout(moveTimer);
+      cleanupMove?.();
+      stopMetrics();
+    };
+  });
+  let cleanupMove: (() => void) | null = null;
+
+  const allRows = $derived.by(() => {
     const s = metrics.latest;
     const g = metrics.game;
     return [
@@ -49,13 +93,18 @@
     ];
   });
 
+  const rows = $derived(allRows.filter((r) => visibleKeys.includes(r.key)));
+
   const barColor = (pct: number) =>
-    pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c";
+    levelColor(pct);
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="mini"
+  style:opacity
   data-tauri-drag-region
   ondblclick={() => {
     void invoke("show_main");
@@ -63,7 +112,7 @@
   }}
 >
   <button class="close" title="隐藏悬浮窗" onclick={() => invoke("hide_mini")}>
-    ✕
+    <Icon name="close" size={12} />
   </button>
   {#each rows as r (r.key)}
     <div class="row">
@@ -77,15 +126,18 @@
       <span class="v">{r.text}</span>
     </div>
   {/each}
+  {#if !rows.length}
+    <div class="empty">未勾选任何指标</div>
+  {/if}
 </div>
 
 <style>
   .mini {
     position: fixed;
     inset: 0;
-    background: rgba(13, 18, 32, 0.92);
-    border: 1px solid #232a3a;
-    border-radius: 10px;
+    background: linear-gradient(155deg, color-mix(in srgb, var(--panel) 88%, var(--accent) 12%), var(--bg-glass));
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+    border-radius: var(--radius-2xl);
     padding: 8px 10px;
     display: flex;
     flex-direction: column;
@@ -93,53 +145,74 @@
     gap: 3px;
     user-select: none;
     overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  }
+  .mini::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 10px;
+    right: 10px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 70%, transparent), transparent);
   }
   .close {
     position: absolute;
     top: 2px;
     right: 4px;
+    display: grid;
+    place-items: center;
     background: transparent;
     border: none;
-    color: #8b94a7;
-    font-size: 10px;
+    color: var(--text-dim);
+    font-size: var(--font-2xs);
     cursor: pointer;
     padding: 2px 5px;
   }
   .close:hover {
-    color: #e8ecf4;
+    color: var(--text);
+    background: var(--panel-alt);
+    border-radius: var(--radius-xs);
   }
   .row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-6);
   }
   .k {
     width: 30px;
-    font-size: 10.5px;
-    color: #8b94a7;
+    font-size: var(--font-2xs);
+    color: var(--text-dim);
     flex: none;
   }
   .bar {
     flex: 1;
-    height: 6px;
-    background: #1d2434;
-    border-radius: 3px;
+    height: 5px;
+    background: var(--track-deep);
+    border-radius: var(--radius-xs);
     overflow: hidden;
   }
   .fill {
     display: block;
     height: 100%;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     transition: width 0.4s ease;
   }
   .v {
     width: 74px;
     text-align: right;
-    font-size: 10.5px;
-    color: #e8ecf4;
+    font-size: var(--font-2xs);
+    font-weight: var(--weight-medium);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     flex: none;
+  }
+  .empty {
+    font-size: var(--font-2xs);
+    color: var(--text-dim);
+    text-align: center;
+    padding: 6px 0;
   }
 </style>

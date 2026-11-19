@@ -1,7 +1,9 @@
 <script lang="ts">
   // uPlot 滚动时间序列图:数据为 (tsMs, y1..yn) 元组数组
+  import { untrack } from "svelte";
   import uPlot from "uplot";
   import "uplot/dist/uPlot.min.css";
+  import { token } from "$lib/theme";
 
   let {
     title,
@@ -17,9 +19,14 @@
     unit?: string;
   } = $props();
 
+  const HEIGHT = 168;
+
   let el: HTMLDivElement;
   let chart: uPlot | null = null;
-  let width = 300;
+  // 必须是响应式状态:ResizeObserver 回调里改它,若只是普通 let,
+  // 下面负责重建图表的 $effect 永远不会被重新触发,窗口拉伸后图表
+  // 会一直停在初始的 300px 宽度。
+  let width = $state(300);
 
   function timeAxisValues(
     _u: uPlot,
@@ -40,23 +47,27 @@
   function opts(): uPlot.Options {
     const axes: uPlot.Axis[] = [
       {
-        stroke: "#5a647a",
-        grid: { stroke: "#1d2434" },
-        ticks: { stroke: "#1d2434" },
+        stroke: token("--chart-axis", "#5a647a"),
+        grid: { stroke: token("--chart-grid", "#1d2434") },
+        ticks: { stroke: token("--chart-grid", "#1d2434") },
         values: timeAxisValues,
       },
       {
-        stroke: "#5a647a",
-        grid: { stroke: "#1d2434" },
-        ticks: { stroke: "#1d2434" },
+        stroke: token("--chart-axis", "#5a647a"),
+        grid: { stroke: token("--chart-grid", "#1d2434") },
+        ticks: { stroke: token("--chart-grid", "#1d2434") },
         label: unit || undefined,
       },
     ];
     return {
       width,
-      height: 140,
-      legend: { show: true, live: false },
-      cursor: { show: false },
+      height: HEIGHT,
+      // live: true 才会随光标刷新图例里的数值(uPlot 默认给 .u-value 加了
+      // 仅 live 时可见的样式;false 时数值列会被 CSS 直接隐藏)。
+      legend: { show: true, live: true },
+      // show: true 才会绑定鼠标事件 —— 悬浮读数、拖拽框选缩放、
+      // 双击还原时间轴全部依赖它;关掉则一个事件都不注册。
+      cursor: { show: true, x: true, y: false },
       scales: yMax != null ? { y: { range: [0, yMax] } } : undefined,
       axes,
       series: [
@@ -72,10 +83,13 @@
     };
   }
 
+  // 只在挂载时建一次图表,避免每次宽度变化都销毁重建(会丢动画与光标状态)。
+  // 用 untrack 读 data/配置:否则每秒一条新采样都会把建图表这段再跑一遍
+  // (虽然 chart 非空会提前返回,但白白唤醒一次 effect)。
   $effect(() => {
-    void width;
     if (!el || chart) return;
-    chart = new uPlot(opts(), data as unknown as uPlot.AlignedData, el);
+    const initial = untrack(() => ({ o: opts(), d: data as unknown as uPlot.AlignedData }));
+    chart = new uPlot(initial.o, initial.d, el);
     const ro = new ResizeObserver((entries) => {
       const w = Math.max(200, Math.floor(entries[0].contentRect.width));
       if (w !== width) width = w;
@@ -88,35 +102,96 @@
     };
   });
 
+  // 宽度变化:交给 uPlot 自己 resize,不重建实例
   $effect(() => {
-    void width;
-    if (chart && data.length)
-      chart.setData(data as unknown as uPlot.AlignedData);
+    if (chart && width > 0) chart.setSize({ width, height: HEIGHT });
+  });
+
+  // 数据变化:每来一条新采样都要重绘,但不能把用户拖出来的时间范围顶掉。
+  // setData(data, false) 只换数据不动 x 轴,可是它同时会跳过内部的 commit(),
+  // 画面不会刷新,所以要再补一次 redraw(false) —— 那条路径只走 commit(),
+  // 不碰 setScale。
+  $effect(() => {
+    if (chart && data.length) {
+      chart.setData(data as unknown as uPlot.AlignedData, false);
+      chart.redraw(false);
+    }
   });
 </script>
 
 <div class="chart-card">
-  <div class="title">{title}</div>
+  <div class="title">
+    <span>{title}</span>
+    <span class="hint" title="拖拽框选放大时间轴，双击还原">拖拽缩放 · 双击还原</span>
+  </div>
   <div class="plot" bind:this={el}></div>
 </div>
 
 <style>
   .chart-card {
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
     padding: 10px 12px 6px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-4);
     min-width: 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .chart-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
   }
   .title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
+    color: var(--text-dim);
+  }
+  .title .hint {
+    font-size: var(--font-2xs);
+    font-weight: var(--weight-normal);
+    color: var(--text-dim);
+    opacity: 0.55;
+    white-space: nowrap;
   }
   .plot {
     width: 100%;
+  }
+
+  /* uPlot 自带样式是按浅色主题写的,这里覆盖成深色面板上的观感 */
+  .plot :global(.u-legend) {
+    font-size: var(--font-xs);
+    line-height: 1.4;
+    color: var(--text-dim);
+    margin: 0;
+    text-align: left;
+  }
+  .plot :global(.u-legend .u-marker) {
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+  }
+  .plot :global(.u-legend .u-series > *) {
+    padding: 0 8px 0 0;
+  }
+  .plot :global(.u-legend .u-value) {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .plot :global(.u-cursor-x) {
+    border-right: 1px dashed color-mix(in srgb, var(--accent) 85%, transparent);
+  }
+  .plot :global(.u-select) {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+    border-right: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  .plot :global(.u-cursor-pt) {
+    border-width: 0;
   }
 </style>

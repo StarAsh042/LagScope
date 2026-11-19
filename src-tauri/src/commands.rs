@@ -1,5 +1,7 @@
 //! Tauri 命令层:前端 invoke 的入口。
 
+use std::sync::Arc;
+
 use serde::Serialize;
 
 use sysinfo::Pid;
@@ -9,9 +11,11 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::collectors::hung_window;
 use crate::collectors::presentmon::PresentMonWatch;
-use crate::collectors::{DiskInfo, MetricSample, ProcessInfo};
+use crate::collectors::{DiskInfo, IoBreakdown, MetricSample, ProcessInfo};
 use crate::engine::{LagEvent, LagReason};
+use crate::logging;
 use crate::state::AppState;
+use crate::store::export::{self, ExportFormat};
 
 /// 帧监测与 DPC 归因的实时运行状态(设置页展示用)
 #[derive(Debug, Serialize)]
@@ -24,33 +28,62 @@ pub struct MonitorStatus {
     /// 用户是否开启了对应功能
     pub frame_enabled: bool,
     pub dpc_enabled: bool,
+    /// 当前进程是否以管理员权限运行
+    pub elevated: bool,
+    /// DPC 会话创建失败的原因(仅失败时有值)
+    pub dpc_error: Option<String>,
 }
 
 /// 查询监测器运行状态
 #[tauri::command]
 pub fn get_monitor_status(state: State<'_, std::sync::Arc<AppState>>) -> MonitorStatus {
-    let frame = state.frame_monitor.lock().unwrap().as_ref().map(|w| w.is_available());
-    let dpc = state.dpc_watch.lock().unwrap().as_ref().map(|w| w.is_available());
+    let frame = crate::state::lock_or_recover(&state.frame_monitor)
+        .as_ref()
+        .map(|w| w.is_available());
+    let dpc = crate::state::lock_or_recover(&state.dpc_watch)
+        .as_ref()
+        .map(|w| w.is_available());
+    // 只在"开了但没跑起来"时才有值:跑成功了这条原因就该消失
+    let dpc_error = crate::state::lock_or_recover(&state.dpc_watch)
+        .as_ref()
+        .and_then(|w| w.last_error());
     MonitorStatus {
         frame_active: frame == Some(true),
         dpc_active: dpc == Some(true),
         frame_enabled: frame.is_some(),
         dpc_enabled: dpc.is_some(),
+        elevated: crate::admin::is_elevated(),
+        dpc_error,
     }
 }
 
 /// 启动/停止 PresentMon 帧监测(设置开关与启动流程共用)
-pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enable: bool) {
-    let mut fm = state.frame_monitor.lock().unwrap();
+///
+/// `stutter_gap_ms` 是帧间隔尖峰阈值,从设置透传给解析线程。
+pub fn set_frame_monitor(
+    app: &AppHandle,
+    state: &std::sync::Arc<AppState>,
+    enable: bool,
+    stutter_gap_ms: f64,
+) {
+    let mut fm = crate::state::lock_or_recover(&state.frame_monitor);
     if enable {
-        if fm.is_none() {
-            match app.path().resolve("extras/PresentMon.exe", BaseDirectory::Resource) {
+        match fm.as_ref() {
+            // 已在运行:只热更新阈值,不重启子进程
+            Some(watch) => watch.set_stutter_gap_ms(stutter_gap_ms),
+            None => match app
+                .path()
+                .resolve("extras/PresentMon.exe", BaseDirectory::Resource)
+            {
                 Ok(p) if p.exists() => {
-                    *fm = Some(PresentMonWatch::start(&p));
+                    *fm = Some(PresentMonWatch::start(&p, stutter_gap_ms));
                 }
-                Ok(p) => eprintln!("[presentmon] 未找到 PresentMon.exe: {}", p.display()),
-                Err(e) => eprintln!("[presentmon] 解析资源路径失败: {e}"),
-            }
+                Ok(p) => logging::warn(
+                    "presentmon",
+                    format!("未找到 PresentMon.exe: {}", p.display()),
+                ),
+                Err(e) => logging::warn("presentmon", format!("解析资源路径失败: {e}")),
+            },
         }
     } else {
         // Drop 会终止子进程
@@ -60,7 +93,7 @@ pub fn set_frame_monitor(app: &AppHandle, state: &std::sync::Arc<AppState>, enab
 
 /// 启动/停止 ETW DPC 归因(设置开关与启动流程共用)
 pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
-    let mut dw = state.dpc_watch.lock().unwrap();
+    let mut dw = crate::state::lock_or_recover(&state.dpc_watch);
     if enable {
         if dw.is_none() {
             *dw = Some(crate::collectors::dpc_etw::DpcWatch::start());
@@ -68,6 +101,24 @@ pub fn set_dpc_watch(state: &std::sync::Arc<AppState>, enable: bool) {
     } else {
         // Drop:停止标志 → 会话线程结束 trace
         *dw = None;
+    }
+}
+
+/// 把设置里的悬浮窗尺寸/位置应用到当前窗口(保存设置与启动时共用)
+///
+/// 位置两轴任一为负表示"未设置",只更新尺寸;窗口不存在时静默跳过。
+pub fn apply_mini_window(app: &AppHandle, settings: &crate::settings::Settings) {
+    let Some(w) = app.get_webview_window("mini") else {
+        return;
+    };
+    let (width, height) = settings.mini_size();
+    if let Err(e) = w.set_size(tauri::LogicalSize { width, height }) {
+        logging::warn("mini", format!("调整悬浮窗尺寸失败: {e}"));
+    }
+    if let Some((x, y)) = settings.mini_position()
+        && let Err(e) = w.set_position(tauri::PhysicalPosition { x, y })
+    {
+        logging::warn("mini", format!("调整悬浮窗位置失败: {e}"));
     }
 }
 
@@ -86,16 +137,21 @@ pub fn toggle_mini(app: AppHandle) -> Result<(), String> {
         // 理论上不会走到(setup 已预创建);兜底再建一次
         None => {
             use tauri::WebviewUrl;
-            tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
+            let settings = crate::settings::load_settings(&app);
+            let (width, height) = settings.mini_size();
+            let w = tauri::WebviewWindowBuilder::new(&app, "mini", WebviewUrl::App("mini".into()))
                 .title("LagScope 悬浮窗")
-                .inner_size(300.0, 96.0)
+                .inner_size(width, height)
                 .decorations(false)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(false)
                 .build()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string())?;
+            if let Some((x, y)) = settings.mini_position() {
+                let _ = w.set_position(tauri::PhysicalPosition { x, y });
+            }
+            Ok(())
         }
     }
 }
@@ -123,28 +179,42 @@ pub fn show_main(app: AppHandle) -> Result<(), String> {
 
 /// 最新进程快照(1Hz 由采集线程刷新,进程表每 2s 拉取)
 #[tauri::command]
-pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Vec<ProcessInfo> {
-    state.processes.lock().unwrap().clone()
+pub fn get_processes(state: State<'_, std::sync::Arc<AppState>>) -> Arc<Vec<ProcessInfo>> {
+    // 直接返回共享快照的 Arc:进程表每 2s 拉一次,深拷贝 300 个 ProcessInfo
+    // (每个含一次 String 分配)纯属浪费,序列化时按引用读取即可
+    crate::state::lock_or_recover(&state.processes).clone()
 }
 
 /// 最新系统采样
 #[tauri::command]
-pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<MetricSample> {
-    state.last_sample.lock().unwrap().clone()
+pub fn get_latest_sample(state: State<'_, std::sync::Arc<AppState>>) -> Option<Arc<MetricSample>> {
+    crate::state::lock_or_recover(&state.last_sample).clone()
 }
 
 /// 磁盘静态容量
 #[tauri::command]
 pub fn get_disks(state: State<'_, std::sync::Arc<AppState>>) -> Vec<DiskInfo> {
-    state.disks.lock().unwrap().clone()
+    crate::state::lock_or_recover(&state.disks).clone()
+}
+
+/// 每磁盘卷与每网卡的实时 I/O 速率(1Hz 更新,前端按需轮询)
+#[tauri::command]
+pub fn get_io_breakdown(state: State<'_, std::sync::Arc<AppState>>) -> IoBreakdown {
+    IoBreakdown {
+        volumes: crate::state::lock_or_recover(&state.volumes).clone(),
+        nics: crate::state::lock_or_recover(&state.nics).clone(),
+    }
 }
 
 /// 结束进程(对应任务管理器的"结束任务")
 #[tauri::command]
 pub fn kill_process(state: State<'_, std::sync::Arc<AppState>>, pid: u32) -> Result<bool, String> {
-    let mut sys = state.sys.lock().unwrap();
+    let mut sys = crate::state::lock_or_recover(&state.sys);
     // 先补一次进程列表,保证目标进程可见
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+    sys.refresh_processes(
+        sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+        true,
+    );
     match sys.process(Pid::from_u32(pid)) {
         Some(proc) => Ok(proc.kill()),
         None => Err(format!("进程 {pid} 不存在或已退出")),
@@ -160,29 +230,76 @@ pub fn list_lag_events(
     state.db.list_events(limit.unwrap_or(100))
 }
 
+/// 删除指定的卡顿事件(用户手动清理),返回实际删除条数
+///
+/// 不校验 id 是否存在:界面上的列表可能比库里旧(事件已被保留策略裁掉),
+/// 重复删除或删到不存在的 id 一律按 0 条处理,不报错。
+#[tauri::command]
+pub fn delete_lag_events(
+    state: State<'_, std::sync::Arc<AppState>>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    state.db.delete_events(&ids)
+}
+
+/// 导出结果:落盘路径 + 条数,前端据此提示并「在文件夹中显示」
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub path: String,
+    pub count: usize,
+    pub format: String,
+}
+
+/// 把最近的事件导出成 CSV / JSON 落盘,返回绝对路径供前端 reveal
+#[tauri::command]
+pub fn export_lag_events(
+    app: tauri::AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+    format: String,
+    limit: Option<u32>,
+) -> Result<ExportResult, String> {
+    let fmt = ExportFormat::from_name(&format)?;
+    // 默认导出全库:上限取用户设置的保留条数,而不是编译期常量
+    let events = state
+        .db
+        .list_events(limit.unwrap_or_else(|| state.db.retain_rows()))?;
+    if events.is_empty() {
+        return Err("还没有卡顿事件可以导出".to_string());
+    }
+    let path = export::write_to(&export_dir(&app), &events, fmt)?;
+    Ok(ExportResult {
+        path: path.to_string_lossy().into_owned(),
+        count: events.len(),
+        format: fmt.extension().to_string(),
+    })
+}
+
+/// 导出目录:优先「下载/LagScope」,取不到下载目录时退回应用数据目录
+fn export_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    let base = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .unwrap_or_else(|_| std::env::temp_dir());
+    base.join("LagScope")
+}
+
 /// 立即诊断:抓取当前状态生成一次事件并推送前端(命令与托盘菜单共用)
 pub fn run_diagnose(
     app: &tauri::AppHandle,
     state: &std::sync::Arc<AppState>,
 ) -> Result<LagEvent, String> {
-    let counters = state
-        .last_sample
-        .lock()
-        .unwrap()
+    let counters = crate::state::lock_or_recover(&state.last_sample)
         .clone()
+        .map(Arc::unwrap_or_clone)
         .ok_or_else(|| "暂无采样数据".to_string())?;
-    let processes = state.processes.lock().unwrap().clone();
+    let processes = Arc::unwrap_or_clone(crate::state::lock_or_recover(&state.processes).clone());
     let hung = hung_window::detect_hung_windows();
-    let game = state
-        .frame_monitor
-        .lock()
-        .unwrap()
+    let game = crate::state::lock_or_recover(&state.frame_monitor)
         .as_ref()
         .and_then(|w| w.snapshot());
-    let dpc_top = state
-        .dpc_watch
-        .lock()
-        .unwrap()
+    let dpc_top = crate::state::lock_or_recover(&state.dpc_watch)
         .as_ref()
         .and_then(|w| w.snapshot());
     // 手动诊断只如实记录当前状态;若没有任何自动阈值命中,标记为 manual
@@ -191,8 +308,15 @@ pub fn run_diagnose(
         detail: "手动触发诊断快照".into(),
         value: 0.0,
     }];
-    let mut event =
-        LagEvent::build(counters.ts_ms, reasons, counters, &processes, hung, game, dpc_top);
+    let mut event = LagEvent::build(
+        counters.ts_ms,
+        reasons,
+        counters,
+        &processes,
+        hung,
+        game,
+        dpc_top,
+    );
     let id = state.db.insert_event(&event)?;
     event.id = Some(id);
     let _ = tauri::Emitter::emit(app, crate::collectors::EVENT_LAG, &event);
@@ -208,13 +332,31 @@ pub fn diagnose_now(
     run_diagnose(&app, &state)
 }
 
+/// 当前进程是否以管理员权限运行
+#[tauri::command]
+pub fn get_elevation() -> bool {
+    crate::admin::is_elevated()
+}
+
+/// 以管理员身份重启自身。
+///
+/// DPC 内核跟踪与系统级(HKLM)启动项都要管理员权限,而普通权限下这两处只会
+/// 静默失败。与其让用户自己去找 exe 右键,不如从这里带 UAC 重新拉起。
+/// 返回 Started 时本进程随即退出,前端收不到回包是正常的。
+#[tauri::command]
+pub fn relaunch_as_admin(app: AppHandle) -> Result<crate::admin::RelaunchOutcome, String> {
+    let outcome = crate::admin::relaunch_as_admin()?;
+    if matches!(outcome, crate::admin::RelaunchOutcome::Started) {
+        app.exit(0);
+    }
+    Ok(outcome)
+}
+
 #[cfg(test)]
 mod tests {
     use std::process::{Command, Stdio};
 
-    use serde::Serialize;
-
-use sysinfo::Pid;
+    use sysinfo::Pid;
 
     /// 用一个短命子进程验证 refresh_processes(Some)+kill 的 sysinfo 通路
     #[test]
@@ -228,7 +370,10 @@ use sysinfo::Pid;
         let pid = child.id();
 
         let mut sys = sysinfo::System::new().expect("System::new");
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+        sys.refresh_processes(
+            sysinfo::ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+            true,
+        );
         let killed = sys
             .process(Pid::from_u32(pid))
             .map(|p| p.kill())

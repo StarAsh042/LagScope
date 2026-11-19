@@ -2,10 +2,15 @@
   import { onMount } from "svelte";
 
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
 
+  import ErrorBoundary from "$lib/components/ErrorBoundary.svelte";
   import EventDetail from "$lib/components/EventDetail.svelte";
   import EventTimeline from "$lib/components/EventTimeline.svelte";
   import Gauge from "$lib/components/Gauge.svelte";
+  import Icon from "$lib/components/Icon.svelte";
+  import IoBreakdown from "$lib/components/IoBreakdown.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
   import ProcessTable from "$lib/components/ProcessTable.svelte";
   import RollingChart from "$lib/components/RollingChart.svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
@@ -15,19 +20,66 @@
     fmtBytesPerSec,
     metrics,
     startMetrics,
+    stopMetrics,
   } from "$lib/stores/metrics.svelte";
   import {
     diagnoseNow,
     lagEvents,
     startLagEvents,
+    stopLagEvents,
   } from "$lib/stores/lagEvents.svelte";
+  import { isSettingsShortcut, settingsHint } from "$lib/shortcuts";
+  import { levelColor, token } from "$lib/theme";
   import type { MetricSample } from "$lib/types";
 
-  let tab = $state<"dashboard" | "events" | "startup" | "settings">("dashboard");
+  let tab = $state<"dashboard" | "events" | "startup" | "logs" | "settings">("dashboard");
+  let maximized = $state(false);
+  const appWindow = getCurrentWindow();
+
+  /** 兜底界面里显示出错的是哪一块,避免用户以为整个程序挂了 */
+  const tabLabel = $derived(
+    tab === "dashboard"
+      ? "仪表盘"
+      : tab === "events"
+        ? "卡顿事件"
+        : tab === "startup"
+          ? "启动项"
+          : tab === "logs"
+            ? "运行日志"
+            : "设置"
+  );
+
+  // macOS 上主修饰键是 Cmd,提示文案跟着平台走
+  const settingsTitle = $derived(
+    settingsHint(
+      typeof navigator !== "undefined" &&
+        /Mac|iPhone|iPad/.test(navigator.platform)
+    )
+  );
+
+  /** Ctrl+, / Cmd+, 直接跳到设置页 */
+  function onKeydown(e: KeyboardEvent) {
+    if (isSettingsShortcut(e)) {
+      e.preventDefault();
+      tab = "settings";
+    }
+  }
 
   onMount(() => {
+    void appWindow.isMaximized().then((v) => (maximized = v));
+    let unlistenResize: (() => void) | null = null;
+    void appWindow.onResized(() => appWindow.isMaximized().then((v) => (maximized = v)))
+      .then((fn) => (unlistenResize = fn));
     void startMetrics();
     void startLagEvents();
+
+    // 主窗口与迷你窗是两个路由页面,来回切换会重新挂载本组件;
+    // 不撤掉轮询,每切一次就多一套 2s/30s 定时器与事件监听。
+    return () => {
+      unlistenResize?.();
+      stopMetrics();
+      stopLagEvents();
+    };
   });
 
   // uPlot AlignedData 为列主序:[xs, ys1, ys2, ...]
@@ -94,7 +146,7 @@
   // 帧监测(PresentMon):渲染大户的每秒帧统计
   const gameSub = $derived(
     metrics.game
-      ? `${metrics.game.app} · 卡帧 ${metrics.game.stutters}`
+      ? `${metrics.game.app} · 掉帧 ${metrics.game.stutters}`
       : "无渲染活动"
   );
   const gameData = $derived(
@@ -107,23 +159,37 @@
   const temp = $derived(metrics.latest?.temperatureC ?? null);
   const tempRaw = $derived(temp == null ? undefined : `${Math.round(temp)}°`);
   const tempColor = $derived(
-    temp == null ? undefined : temp >= 75 ? "#e5484d" : temp >= 60 ? "#f5a623" : "#3dd68c"
+    temp == null ? undefined : levelColor(temp, 75, 60)
   );
+
+  // 底栏指标:先拼成数组再统一插分隔符。此前是手写 "·" 字面量,断行处多打了
+  // 一个,显示成 "中断 0.0%  ·  ·  磁盘延迟"。
+  const footerStats = $derived.by(() => {
+    const s = metrics.latest;
+    const items: string[] = [];
+    if (s?.temperatureC != null) items.push(`温度 ${s.temperatureC.toFixed(0)}℃`);
+    items.push(`中断 ${s ? s.interruptPct.toFixed(1) : "--"}%`);
+    items.push(`磁盘延迟 ${s ? (s.diskAvgSecTransfer * 1000).toFixed(1) : "--"} ms`);
+    items.push(`队列 ${s?.diskQueueLength.toFixed(2) ?? "--"}`);
+    return items;
+  });
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <main>
-  <header>
+  <header data-tauri-drag-region="deep">
     <div class="brand">
-      <h1>LagScope <span class="zh">卡顿透视</span></h1>
+      <h1><Icon name="pulse" size={20} /> LagScope <span class="zh">卡顿透视</span></h1>
       <nav>
         <button
           class:active={tab === "dashboard"}
           onclick={() => (tab = "dashboard")}
         >
-          仪表盘
+          <Icon name="dashboard" /> 仪表盘
         </button>
         <button class:active={tab === "events"} onclick={() => (tab = "events")}>
-          卡顿事件
+          <Icon name="events" /> 卡顿事件
           {#if lagEvents.list.length}
             <span class="badge">{lagEvents.list.length}</span>
           {/if}
@@ -132,13 +198,17 @@
           class:active={tab === "startup"}
           onclick={() => (tab = "startup")}
         >
-          启动项
+          <Icon name="startup" /> 启动项
+        </button>
+        <button class:active={tab === "logs"} onclick={() => (tab = "logs")}>
+          <Icon name="logs" /> 日志
         </button>
         <button
           class:active={tab === "settings"}
           onclick={() => (tab = "settings")}
+          title={settingsTitle}
         >
-          设置
+          <Icon name="settings" /> 设置
         </button>
       </nav>
     </div>
@@ -149,14 +219,28 @@
         </button>
       {/if}
       <button class="mini-toggle" onclick={() => invoke("toggle_mini")}>
-        悬浮窗
+        <Icon name="mini" /> 悬浮窗
       </button>
       <span class="status" class:on={metrics.connected}>
-        {metrics.connected ? "● 采集中" : "○ 连接中…"}
+        <span class="dot"></span>{metrics.connected ? "采集中" : "连接中…"}
       </span>
+      <div class="window-controls">
+        <button title="最小化" data-tauri-drag-region="false" onclick={() => void appWindow.minimize()}>
+          <Icon name="minimize" size={13} />
+        </button>
+        <button title={maximized ? "还原" : "最大化"} data-tauri-drag-region="false" onclick={() => void appWindow.toggleMaximize()}>
+          <Icon name={maximized ? "restore" : "maximize"} size={12} />
+        </button>
+        <button class="quit" title="关闭" data-tauri-drag-region="false" onclick={() => void appWindow.close()}>
+          <Icon name="close" size={12} />
+        </button>
+      </div>
     </div>
   </header>
 
+  <!-- key:切 tab 时重建边界,否则某一页的异常会一直锁着后续页面 -->
+  {#key tab}
+  <ErrorBoundary label={tabLabel}>
   {#if tab === "dashboard"}
     <section class="gauges">
     <Gauge label="CPU" value={metrics.latest?.cpuTotal ?? null} sub={cpuSub} />
@@ -213,8 +297,8 @@
       yMax={100}
       unit="%"
       series={[
-        { label: "总", color: "#3b6cd4" },
-        { label: "核", color: "#3b6cd466" },
+        { label: "总", color: token("--chart-cpu", "#3b6cd4") },
+        { label: "核", color: token("--chart-cpu-soft", "#3b6cd466") },
       ]}
     />
     <RollingChart
@@ -223,8 +307,8 @@
       yMax={100}
       unit="%"
       series={[
-        { label: "物理", color: "#3dd68c" },
-        { label: "提交", color: "#f5a623" },
+        { label: "物理", color: token("--chart-mem-used", "#3dd68c") },
+        { label: "提交", color: token("--chart-mem-commit", "#f5a623") },
       ]}
     />
     <RollingChart
@@ -232,9 +316,9 @@
       data={diskData}
       unit="MB/s"
       series={[
-        { label: "读 MB/s", color: "#9a6cd4" },
-        { label: "写 MB/s", color: "#d46cb4" },
-        { label: "活跃 %", color: "#f5a623" },
+        { label: "读 MB/s", color: token("--chart-disk-read", "#9a6cd4") },
+        { label: "写 MB/s", color: token("--chart-disk-write", "#d46cb4") },
+        { label: "活跃 %", color: token("--chart-disk-active", "#f5a623") },
       ]}
     />
     <RollingChart
@@ -242,8 +326,8 @@
       data={netData}
       unit="KB/s"
       series={[
-        { label: "下行", color: "#3dd68c" },
-        { label: "上行", color: "#3b6cd4" },
+        { label: "下行", color: token("--chart-net-rx", "#3dd68c") },
+        { label: "上行", color: token("--chart-net-tx", "#3b6cd4") },
       ]}
     />
     {#if metrics.latest?.gpuUtilPct != null || metrics.latest?.gpuMemMb != null}
@@ -252,18 +336,18 @@
         data={gpuData}
         unit=""
         series={[
-          { label: "3D %", color: "#f5a623" },
-          { label: "显存 MB", color: "#8b94a7" },
+          { label: "3D %", color: token("--chart-gpu-util", "#f5a623") },
+          { label: "显存 MB", color: token("--chart-gpu-mem", "#8b94a7") },
         ]}
       />
     {/if}
     <RollingChart
-      title="DPC / 硬缺页(次·页/秒)"
+      title="DPC / 内存换页(次·页/秒)"
       data={chartData((s) => [s.dpcPerSec, s.pageInputPerSec])}
       unit="/s"
       series={[
-        { label: "DPC/s", color: "#e5484d" },
-        { label: "硬缺页/s", color: "#f5a623" },
+        { label: "DPC/s", color: token("--chart-dpc", "#e5484d") },
+        { label: "内存换页/s", color: token("--chart-page-fault", "#f5a623") },
       ]}
     />
     {#if metrics.gameHistory.length}
@@ -272,26 +356,23 @@
         data={gameData}
         unit="FPS"
         series={[
-          { label: "FPS", color: "#3dd68c" },
-          { label: "最大间隔 ms", color: "#e5484d" },
+          { label: "FPS", color: token("--chart-fps", "#3dd68c") },
+          { label: "最大间隔 ms", color: token("--chart-frame-gap", "#e5484d") },
         ]}
       />
     {/if}
   </section>
 
+  <IoBreakdown io={metrics.io} />
+
   <ProcessTable processes={metrics.processes} />
 
   <footer>
-    <span>
-      {metrics.latest?.temperatureC != null
-        ? `温度 ${metrics.latest.temperatureC.toFixed(0)}℃  ·  `
-        : ""}
-      中断 {metrics.latest ? metrics.latest.interruptPct.toFixed(1) : "--"}%  ·
-      ·  磁盘延迟
-      {metrics.latest
-        ? (metrics.latest.diskAvgSecTransfer * 1000).toFixed(1)
-        : "--"}
-      ms  ·  队列 {metrics.latest?.diskQueueLength.toFixed(2) ?? "--"}
+    <span class="stats">
+      {#each footerStats as stat, i}
+        {#if i > 0}<span class="sep">·</span>{/if}
+        <span>{stat}</span>
+      {/each}
     </span>
     <span class="io-note">进程 I/O 含网络流量口径(sysinfo)</span>
   </footer>
@@ -302,9 +383,13 @@
     </div>
   {:else if tab === "startup"}
     <StartupPanel />
+  {:else if tab === "logs"}
+    <LogViewer />
   {:else}
     <SettingsPanel />
   {/if}
+  </ErrorBoundary>
+  {/key}
 </main>
 
 <style>
@@ -313,7 +398,7 @@
     flex-direction: column;
     height: 100vh;
     padding: 12px 16px;
-    gap: 12px;
+    gap: var(--space-12);
     /* 内容超高时可纵向滚动,避免底部被裁切 */
     overflow-y: auto;
   }
@@ -321,123 +406,179 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin: -12px -16px 0;
+    padding: 12px 16px 0;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, var(--panel-alt)), transparent);
+  }
+  .window-controls {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .window-controls button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .window-controls button:hover {
+    background: var(--panel-alt);
+    color: var(--text);
+  }
+  .window-controls button.quit:hover {
+    background: var(--err);
+    color: var(--on-accent);
   }
   .brand {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: var(--space-20);
   }
   h1 {
-    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    font-size: var(--font-xl);
     margin: 0;
     letter-spacing: 0.5px;
   }
   h1 .zh {
-    font-size: 14px;
+    font-size: var(--font-lg);
     color: var(--text-dim);
-    font-weight: 400;
+    font-weight: var(--weight-normal);
     margin-left: 6px;
   }
   nav {
     display: flex;
-    gap: 6px;
+    gap: var(--space-6);
   }
   nav button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-dim);
-    border-radius: 8px;
+    border-radius: var(--radius-xl);
     padding: 5px 14px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   nav button:hover {
     color: var(--text);
-    background: #1a2130;
+    background: var(--panel-alt);
   }
   nav button.active {
     color: var(--text);
-    background: #1a2130;
+    background: var(--panel-alt);
     border-color: var(--border);
   }
   .badge {
     display: inline-block;
     margin-left: 6px;
-    background: var(--err, #e5484d);
-    color: #fff;
-    font-size: 10px;
-    border-radius: 8px;
+    background: var(--err);
+    color: var(--on-accent);
+    font-size: var(--font-2xs);
+    border-radius: var(--radius-xl);
     padding: 1px 6px;
     vertical-align: middle;
   }
   .right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-12);
   }
   .diag {
-    background: #3b6cd4;
+    background: var(--accent);
     border: none;
-    color: #fff;
-    border-radius: 8px;
+    color: var(--on-accent);
+    border-radius: var(--radius-xl);
     padding: 6px 16px;
-    font-size: 13px;
+    font-size: var(--font-md);
     cursor: pointer;
   }
   .diag:hover {
-    background: #4a7be0;
+    background: var(--accent-hover);
   }
   .diag:disabled {
     opacity: 0.6;
     cursor: default;
   }
   .mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: transparent;
-    border: 1px solid var(--border, #232a3a);
-    color: var(--text-dim, #8b94a7);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: var(--radius-xl);
     padding: 5px 12px;
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     cursor: pointer;
   }
   .mini-toggle:hover {
-    color: var(--text, #e8ecf4);
-    border-color: #3b6cd4;
+    color: var(--text);
+    border-color: var(--accent);
   }
   .status {
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-sm);
     color: var(--text-dim);
+  }
+  .status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
   }
   .status.on {
     color: var(--ok);
   }
   .events-view {
     display: flex;
-    gap: 12px;
+    gap: var(--space-12);
     /* 滚动容器内保证最小高度,内部各自滚动 */
     flex: 1 0 480px;
     min-height: 0;
   }
   .gauges {
     display: flex;
-    gap: 8px;
+    gap: var(--space-8);
     justify-content: space-around;
     flex-wrap: wrap;
   }
   .charts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 10px;
+    gap: var(--space-10);
   }
   footer {
     display: flex;
     justify-content: space-between;
-    font-size: 11.5px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
     border-top: 1px solid var(--border);
     padding-top: 8px;
   }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-6);
+  }
+  .stats .sep {
+    opacity: 0.45;
+  }
   .io-note {
     opacity: 0.7;
+    white-space: nowrap;
+    margin-left: 12px;
   }
 </style>

@@ -1,9 +1,33 @@
 <script lang="ts">
-  import { fmtTs, kindMeta, lagEvents } from "$lib/stores/lagEvents.svelte";
+  import {
+    deleteEvent,
+    fmtTs,
+    kindMeta,
+    lagEvents,
+  } from "$lib/stores/lagEvents.svelte";
   import { fmtBytes, fmtBytesPerSec } from "$lib/stores/metrics.svelte";
+  import StatusNote from "$lib/components/StatusNote.svelte";
   import type { LagEvent, TopProc } from "$lib/types";
 
   const ev = $derived(lagEvents.selected);
+
+  /** 只有已入库的记录才删得掉;实时推送里 id 为负的旧式事件没有库行可删 */
+  const deletable = $derived(ev != null && ev.id != null && ev.id > 0);
+  const deleting = $derived(ev?.id != null && lagEvents.deleting === ev.id);
+
+  let confirming = $state(false);
+
+  // 换一条事件就把确认态收掉,避免确认框跟着跑到另一条记录上
+  $effect(() => {
+    void ev?.id;
+    void ev?.tsMs;
+    confirming = false;
+  });
+
+  async function confirmDelete() {
+    if (ev == null) return;
+    if (await deleteEvent(ev)) confirming = false;
+  }
 
   function topList(list: TopProc[], unit: (v: number) => string) {
     return list.map(
@@ -16,8 +40,38 @@
   <div class="detail">
     <div class="head">
       <span class="title">事件详情 {ev.id != null && ev.id > 0 ? `#${ev.id}` : ""}</span>
-      <span class="ts">{fmtTs(ev.tsMs)}</span>
+      <span class="head-right">
+        <span class="ts">{fmtTs(ev.tsMs)}</span>
+        {#if confirming}
+          <span class="ask">删除这条记录?</span>
+          <button class="act danger" onclick={confirmDelete} disabled={deleting}>
+            {deleting ? "删除中…" : "删除"}
+          </button>
+          <button
+            class="act"
+            onclick={() => (confirming = false)}
+            disabled={deleting}
+          >
+            取消
+          </button>
+        {:else}
+          <button
+            class="act"
+            onclick={() => (confirming = true)}
+            disabled={!deletable}
+            title={deletable
+              ? "从事件库中删除这条记录"
+              : "这条事件没有入库记录,无法删除"}
+          >
+            删除
+          </button>
+        {/if}
+      </span>
     </div>
+
+    {#if lagEvents.loadError}
+      <StatusNote kind="error" message={lagEvents.loadError} />
+    {/if}
 
     <div class="reasons">
       {#each ev.reasons as r (r.kind + r.value)}
@@ -42,7 +96,7 @@
           : "--"}
         %
       </span>
-      <span>硬缺页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
+      <span>内存换页 {ev.counters.pageInputPerSec.toFixed(0)} 页/s</span>
       <span>
         磁盘延迟 {(ev.counters.diskAvgSecTransfer * 1000).toFixed(1)} ms
       </span>
@@ -80,7 +134,7 @@
 
     {#if ev.game}
       <div class="section">
-        <div class="stitle">帧统计({ev.game.app})</div>
+        <div class="stitle">渲染帧统计({ev.game.app})</div>
         <div class="line">
           FPS {ev.game.fps} · 平均帧间隔 {ev.game.avgGapMs.toFixed(1)} ms · 最大
           {ev.game.maxGapMs.toFixed(1)} ms · 卡帧 {ev.game.stutters} 次
@@ -116,110 +170,143 @@
     </div>
   </div>
 {:else}
-  <div class="detail empty">
-    从左侧选择一个卡顿事件查看归因详情
+  <div class="detail">
+    <StatusNote kind="empty" message="从左侧选择一个卡顿事件查看归因详情" fill />
   </div>
 {/if}
 
 <style>
   .detail {
     flex: 1;
-    background: var(--panel, #131926);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
     padding: 12px 14px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-12);
     min-width: 0;
     min-height: 0;
-  }
-  .detail.empty {
-    align-items: center;
-    justify-content: center;
-    color: var(--text-dim, #8b94a7);
-    font-size: 13px;
   }
   .head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    gap: var(--space-8);
   }
   .title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-bold);
+  }
+  .head-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .ts {
-    font-size: 12.5px;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-sm);
+    color: var(--text-dim);
+  }
+  .ask {
+    font-size: var(--font-sm);
+    color: var(--text-dim);
+  }
+  .act {
+    font-family: inherit;
+    font-size: var(--font-xs);
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .act:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .act:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .act.danger {
+    border-color: var(--err-border);
+    color: var(--err);
+  }
+  .act.danger:hover:not(:disabled) {
+    background: var(--err-bg-strong);
+    border-color: var(--err-border-strong);
+    color: var(--err-strong);
   }
   .reasons {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-6);
   }
   .reason {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    border-left: 3px solid #888;
-    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--neutral);
+    border-radius: var(--radius-lg);
     padding: 7px 10px;
     display: flex;
-    gap: 10px;
+    gap: var(--space-10);
     align-items: baseline;
   }
   .kind {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
     white-space: nowrap;
   }
   .d {
-    font-size: 13px;
-    color: var(--text, #e8ecf4);
+    font-size: var(--font-md);
+    color: var(--text);
   }
   .counters {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 16px;
-    font-size: 12px;
-    color: var(--text-dim, #8b94a7);
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 6px;
+    gap: var(--space-6) var(--space-16);
+    font-size: var(--font-sm);
+    color: var(--text-dim);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 8px 10px;
   }
   .tops {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
+    gap: var(--space-10);
   }
   .section {
-    background: var(--bg, #0d1220);
-    border: 1px solid var(--border, #232a3a);
-    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 8px 10px;
   }
   .stitle {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-sm);
+    font-weight: var(--weight-bold);
+    color: var(--text-dim);
     margin-bottom: 6px;
   }
   .line {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .hung {
-    font-size: 12.5px;
+    font-size: var(--font-sm);
     padding: 2px 0;
-    color: #f5a623;
+    color: var(--warn);
   }
   .none {
-    font-size: 12px;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-sm);
+    color: var(--text-dim);
   }
 </style>

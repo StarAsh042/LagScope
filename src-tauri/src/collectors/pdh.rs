@@ -6,9 +6,9 @@
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 
 use windows::Win32::System::Performance::{
+    PDH_FMT_COUNTERVALUE, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
     PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
-    PdhGetFormattedCounterValue, PdhOpenQueryW, PDH_FMT_COUNTERVALUE, PDH_FMT_COUNTERVALUE_ITEM_W,
-    PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
+    PdhGetFormattedCounterValue, PdhOpenQueryW,
 };
 
 /// PDH_CSTATUS_VALID_DATA / PDH_CSTATUS_NEW_DATA 都表示有效数据
@@ -61,9 +61,8 @@ impl PdhQuery {
     /// 读取单个(double 型)计数器值;状态无效返回 None。
     pub fn read(&self, counter: &Counter) -> Option<f64> {
         let mut value = PDH_FMT_COUNTERVALUE::default();
-        let status = unsafe {
-            PdhGetFormattedCounterValue(*counter, PDH_FMT_DOUBLE, None, &mut value)
-        };
+        let status =
+            unsafe { PdhGetFormattedCounterValue(*counter, PDH_FMT_DOUBLE, None, &mut value) };
         if status != 0 {
             return None;
         }
@@ -133,7 +132,9 @@ mod tests {
     #[test]
     fn pdh_counters_smoke() {
         let q = PdhQuery::new().expect("open query");
-        let cpu = q.add(r"\Processor(_Total)\% Processor Time").expect("add cpu");
+        let cpu = q
+            .add(r"\Processor(_Total)\% Processor Time")
+            .expect("add cpu");
         let dpc = q
             .add(r"\Processor(_Total)\DPCs Queued/sec")
             .or_else(|_| q.add(r"\Processor(_Total)\DPCs/sec"))
@@ -153,9 +154,15 @@ mod tests {
         let dpc_v = q.read(&dpc).expect("dpc value");
         let pages_v = q.read(&pages).expect("pages value");
         let gpu_inst = gpu.map(|g| q.read_instances(&g)).unwrap_or_default();
-        println!("cpu%={cpu_v:.1} dpc/s={dpc_v:.1} pages/s={pages_v:.1} gpu_instances={}", gpu_inst.len());
+        println!(
+            "cpu%={cpu_v:.1} dpc/s={dpc_v:.1} pages/s={pages_v:.1} gpu_instances={}",
+            gpu_inst.len()
+        );
         // 速率型计数器的合理量级:DPC 每秒几百到几万;若拿到累计原始值会是 1e7 量级
         assert!(dpc_v < 1_000_000.0, "DPC/s 异常(疑似原始值): {dpc_v}");
-        assert!(pages_v < 1_000_000.0, "Pages Input/s 异常(疑似原始值): {pages_v}");
+        assert!(
+            pages_v < 1_000_000.0,
+            "Pages Input/s 异常(疑似原始值): {pages_v}"
+        );
     }
 }

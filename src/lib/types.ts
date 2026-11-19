@@ -13,7 +13,7 @@ export interface MetricSample {
   /** 提交内存(字节) */
   memCommitUsed: number;
   memCommitLimit: number;
-  /** 硬缺页速率 页/秒 */
+  /** 内存换页速率 页/秒 */
   pageInputPerSec: number;
   diskReadBps: number;
   diskWriteBps: number;
@@ -103,6 +103,18 @@ export interface DpcSample {
   drivers: [string, number][];
 }
 
+/** 帧监测与 DPC 归因的实时运行状态(设置页展示用) */
+export interface MonitorStatus {
+  frameActive: boolean;
+  dpcActive: boolean;
+  frameEnabled: boolean;
+  dpcEnabled: boolean;
+  /** 当前进程是否以管理员权限运行 */
+  elevated: boolean;
+  /** DPC 会话创建失败的原因,仅失败时有值 */
+  dpcError: string | null;
+}
+
 export interface LagEvent {
   id: number | null;
   tsMs: number;
@@ -114,4 +126,40 @@ export interface LagEvent {
   hungWindows: string[];
   game: GameSample | null;
   dpcTop: DpcSample | null;
+}
+
+/** 应用写入的运行日志单行(后端 src-tauri/src/logging.rs) */
+export interface LogLine {
+  /** epoch 毫秒,展示时按浏览器本地时区格式化 */
+  tsMs: number;
+  level: string;
+  target: string;
+  message: string;
+}
+
+/** 每磁盘卷实时 I/O 速率 */
+export interface VolumeIo {
+  mount: string;
+  readBps: number;
+  writeBps: number;
+}
+
+export interface NicIo {
+  name: string;
+  rxBps: number;
+  txBps: number;
+}
+
+export interface IoBreakdown {
+  volumes: VolumeIo[];
+  nics: NicIo[];
+}
+
+export interface MiniSettings {
+  miniWidth: number;
+  miniHeight: number;
+  miniX: number;
+  miniY: number;
+  miniOpacity: number;
+  miniMetrics: string[];
 }

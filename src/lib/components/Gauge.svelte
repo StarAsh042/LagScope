@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { levelColor } from "$lib/theme";
+
   // 环形仪表:0-100%,或传入 rawText 显示自定义数值(如 FPS)
   let {
     label,
@@ -18,10 +20,7 @@
   const CIRC = 2 * Math.PI * R;
 
   const pct = $derived(value == null ? 0 : Math.min(100, Math.max(0, value)));
-  const color = $derived(
-    colorOverride ??
-      (pct >= 85 ? "#e5484d" : pct >= 60 ? "#f5a623" : "#3dd68c")
-  );
+  const color = $derived(colorOverride ?? levelColor(pct));
 </script>
 
 <div class="gauge">
@@ -52,7 +51,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-4);
     /* 固定宽度:副标题文字变化时不会引起整排表盘左右抖动 */
     width: 118px;
     flex: none;
@@ -67,23 +66,23 @@
     stroke-linecap: round;
   }
   .track {
-    stroke: var(--track, #232a3a);
+    stroke: var(--track);
   }
   .bar {
     transition: stroke-dasharray 0.6s ease, stroke 0.4s ease;
   }
   text {
-    fill: var(--text, #e8ecf4);
+    fill: var(--text);
     text-anchor: middle;
     dominant-baseline: middle;
   }
   .num {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--font-xl);
+    font-weight: var(--weight-bold);
   }
   .unit {
-    font-size: 10px;
-    fill: var(--text-dim, #8b94a7);
+    font-size: var(--font-2xs);
+    fill: var(--text-dim);
   }
   .meta {
     display: flex;
@@ -92,13 +91,13 @@
     gap: 1px;
   }
   .label {
-    font-size: 12px;
-    color: var(--text, #e8ecf4);
-    font-weight: 500;
+    font-size: var(--font-sm);
+    color: var(--text);
+    font-weight: var(--weight-medium);
   }
   .sub {
-    font-size: 11px;
-    color: var(--text-dim, #8b94a7);
+    font-size: var(--font-xs);
+    color: var(--text-dim);
     white-space: nowrap;
     max-width: 112px;
     overflow: hidden;
